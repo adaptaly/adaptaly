@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap');
+
+body {
+  	margin: 0; line-height: normal;
+}
+
+.loading-files {
+    position: absolute;
+    top: 62px;
+    left: 169px;
+    line-height: 30px;
+}
+.frame-child {
+    position: absolute;
+    top: 122px;
+    left: 50px;
+    border-radius: 20px;
+    background-color: #fff;
+    width: 400px;
+    height: 15px;
+    overflow: hidden;
+}
+.loading-files-parent {
+    position: absolute;
+    top: 198px;
+    left: 468px;
+    border-radius: 12px;
+    background-color: #4bc3b7;
+    border: 2px solid #1e1e1e;
+    box-sizing: border-box;
+    width: 504px;
+    height: 204px;
+    overflow: hidden;
+}
+.loadingfiles {
+    width: 100%;
+    position: relative;
+    background-color: #f8fafc;
+    height: 700px;
+    overflow: hidden;
+    text-align: center;
+    font-size: 22px;
+    color: #fff;
+    font-family: Inter;
+}

@@ -1,5 +1,3 @@
-"use client";
-
 import { FunctionComponent, useState, useRef, DragEvent, ChangeEvent } from 'react';
 import './UploadFiles.css';
 
@@ -14,7 +12,7 @@ interface Message {
 }
 
 const UploadFiles: FunctionComponent = () => {
-    const [files, setFiles] = useState<FileData[]>([]);
+    const [file, setFile] = useState<FileData | null>(null);
     const [message, setMessage] = useState<Message | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -52,36 +50,30 @@ const UploadFiles: FunctionComponent = () => {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
-    const processFiles = (fileList: FileList) => {
-        const newFiles: FileData[] = [];
-        const errors: string[] = [];
-
-        Array.from(fileList).forEach((file) => {
-            const error = validateFile(file);
-            if (error) {
-                errors.push(error);
-            } else {
-                // Check if file already exists
-                const existingFile = files.find(f => f.file.name === file.name && f.file.size === file.size);
-                if (existingFile) {
-                    errors.push(`File "${file.name}" is already selected.`);
-                } else {
-                    newFiles.push({
-                        file,
-                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
-                    });
-                }
-            }
-        });
-
-        if (errors.length > 0) {
-            showMessage(errors[0], 'error');
+    const processFiles = async (fileList: FileList) => {
+        if (fileList.length === 0) return;
+        
+        // Only take the first file
+        const selectedFile = fileList[0];
+        const error = validateFile(selectedFile);
+        
+        if (error) {
+            showMessage(error, 'error');
+            return;
         }
 
-        if (newFiles.length > 0) {
-            setFiles(prev => [...prev, ...newFiles]);
-            showMessage(`${newFiles.length} file(s) added successfully!`, 'success');
-        }
+        const fileData: FileData = {
+            file: selectedFile,
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+        };
+
+        setFile(fileData);
+        showMessage(`File "${selectedFile.name}" selected successfully!`, 'success');
+        
+        // Automatically start upload after a brief delay
+        setTimeout(() => {
+            handleUpload(fileData);
+        }, 1000);
     };
 
     const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
@@ -131,13 +123,15 @@ const UploadFiles: FunctionComponent = () => {
     };
 
     const removeFile = (id: string) => {
-        setFiles(prev => prev.filter(f => f.id !== id));
+        setFile(null);
         showMessage('File removed successfully!', 'success');
     };
 
-    const handleUpload = async () => {
-        if (files.length === 0) {
-            showMessage('Please select at least one file to upload.', 'warning');
+    const handleUpload = async (fileData?: FileData) => {
+        const targetFile = fileData || file;
+        
+        if (!targetFile) {
+            showMessage('Please select a file to upload.', 'warning');
             return;
         }
 
@@ -145,16 +139,22 @@ const UploadFiles: FunctionComponent = () => {
         
         try {
             // Simulate upload process
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 3000));
             
-            // Here you would typically upload files to your server
-            console.log('Files to upload:', files.map(f => f.file));
+            // Here you would typically upload the file to your server
+            console.log('File to upload:', targetFile.file);
             
-            showMessage(`Successfully uploaded ${files.length} file(s)!`, 'success');
-            setFiles([]);
+            showMessage(`Successfully uploaded "${targetFile.file.name}"!`, 'success');
+            
+            // Reset after successful upload
+            setTimeout(() => {
+                setFile(null);
+                setMessage(null);
+                setIsUploading(false);
+            }, 2000);
+            
         } catch (error) {
             showMessage('Upload failed. Please try again.', 'error');
-        } finally {
             setIsUploading(false);
         }
     };
@@ -184,7 +184,6 @@ const UploadFiles: FunctionComponent = () => {
                             ref={fileInputRef}
                             type="file"
                             className="file-input"
-                            multiple
                             accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                             onChange={handleFileInputChange}
                             disabled={isUploading}
@@ -210,61 +209,16 @@ const UploadFiles: FunctionComponent = () => {
                     </div>
                 )}
 
-                {files.length > 0 && (
+                {file && !isUploading && (
                     <div className="file-list">
-                        {files.map((fileData) => (
-                            <div key={fileData.id} className="file-item">
-                                <div className="file-name" title={fileData.file.name}>
-                                    {fileData.file.name}
-                                </div>
-                                <div className="file-size">
-                                    {formatFileSize(fileData.file.size)}
-                                </div>
-                                <button
-                                    className="remove-file"
-                                    onClick={() => removeFile(fileData.id)}
-                                    disabled={isUploading}
-                                >
-                                    Remove
-                                </button>
+                        <div className="file-item">
+                            <div className="file-name" title={file.file.name}>
+                                {file.file.name}
                             </div>
-                        ))}
-                        
-                        {files.length > 0 && !isUploading && (
-                            <div style={{ 
-                                textAlign: 'center', 
-                                marginTop: '12px',
-                                paddingTop: '8px',
-                                borderTop: '1px solid rgba(255,255,255,0.3)'
-                            }}>
-                                <button
-                                    onClick={handleUpload}
-                                    style={{
-                                        background: 'rgba(0,0,0,0.6)',
-                                        border: '1px solid rgba(255,255,255,0.4)',
-                                        color: 'white',
-                                        borderRadius: '6px',
-                                        padding: '8px 16px',
-                                        fontSize: '12px',
-                                        fontWeight: 'bold',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.currentTarget.style.background = 'rgba(0,0,0,0.8)';
-                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.6)';
-                                        e.currentTarget.style.transform = 'translateY(-1px)';
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.currentTarget.style.background = 'rgba(0,0,0,0.6)';
-                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)';
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                    }}
-                                >
-                                    Upload All Files
-                                </button>
+                            <div className="file-size">
+                                {formatFileSize(file.file.size)}
                             </div>
-                        )}
+                        </div>
                     </div>
                 )}
             </div>
