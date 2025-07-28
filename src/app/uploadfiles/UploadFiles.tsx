@@ -123,7 +123,8 @@ const UploadFiles: FunctionComponent = () => {
         }
     };
 
-    const handleUploadButtonClick = () => {
+    const handleUploadButtonClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
         if (fileInputRef.current) {
             fileInputRef.current.click();
         }
@@ -169,7 +170,6 @@ const UploadFiles: FunctionComponent = () => {
                     onDragLeave={handleDragLeave}
                     onDragOver={handleDragOver}
                     onDrop={handleDrop}
-                    onClick={handleUploadButtonClick}
                 >
                     <b className="drag-or-drop">
                         {isUploading ? 'Uploading...' : 'Drag or Drop your files'}
@@ -235,14 +235,14 @@ const UploadFiles: FunctionComponent = () => {
                                 textAlign: 'center', 
                                 marginTop: '12px',
                                 paddingTop: '8px',
-                                borderTop: '1px solid rgba(255,255,255,0.2)'
+                                borderTop: '1px solid rgba(255,255,255,0.3)'
                             }}>
                                 <button
                                     onClick={handleUpload}
                                     style={{
-                                        background: 'rgba(255,255,255,0.9)',
-                                        border: 'none',
-                                        color: '#4bc3b7',
+                                        background: 'rgba(0,0,0,0.6)',
+                                        border: '1px solid rgba(255,255,255,0.4)',
+                                        color: 'white',
                                         borderRadius: '6px',
                                         padding: '8px 16px',
                                         fontSize: '12px',
@@ -251,11 +251,13 @@ const UploadFiles: FunctionComponent = () => {
                                         transition: 'all 0.2s ease'
                                     }}
                                     onMouseOver={(e) => {
-                                        e.currentTarget.style.background = 'white';
+                                        e.currentTarget.style.background = 'rgba(0,0,0,0.8)';
+                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.6)';
                                         e.currentTarget.style.transform = 'translateY(-1px)';
                                     }}
                                     onMouseOut={(e) => {
-                                        e.currentTarget.style.background = 'rgba(255,255,255,0.9)';
+                                        e.currentTarget.style.background = 'rgba(0,0,0,0.6)';
+                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)';
                                         e.currentTarget.style.transform = 'translateY(0)';
                                     }}
                                 >
