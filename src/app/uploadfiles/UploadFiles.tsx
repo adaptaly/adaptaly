@@ -135,18 +135,14 @@ const UploadFiles: FunctionComponent = () => {
         setIsUploading(true);
         
         try {
-            // Simulate upload process
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Quick upload simulation
+            await new Promise(resolve => setTimeout(resolve, 800));
             
             // Here you would typically upload the file to your server
             console.log('File to upload:', targetFile.file);
             
-            showMessage(`Successfully uploaded "${targetFile.file.name}"!`, 'success');
-            
-            // Redirect to loading page after successful upload
-            setTimeout(() => {
-                window.location.href = 'https://www.adaptaly.com/loadingpage';
-            }, 1500);
+            // Redirect immediately after upload
+            window.location.href = 'https://www.adaptaly.com/loadingpage';
             
         } catch (error) {
             showMessage('Upload failed. Please try again.', 'error');
@@ -190,7 +186,7 @@ const UploadFiles: FunctionComponent = () => {
                             <div className="upload-progress">
                                 <div className="progress-bar" style={{ width: '100%' }}></div>
                             </div>
-                            <div className="uploading-text">Processing...</div>
+                            <div className="uploading-text">Uploading...</div>
                         </>
                     )}
                 </div>
