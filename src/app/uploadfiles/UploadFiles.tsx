@@ -1,3 +1,5 @@
+"use client";
+
 import { FunctionComponent, useState, useRef, DragEvent, ChangeEvent } from 'react';
 import './UploadFiles.css';
 
