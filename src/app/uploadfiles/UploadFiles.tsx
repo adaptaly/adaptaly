@@ -124,11 +124,6 @@ const UploadFiles: FunctionComponent = () => {
         }
     };
 
-    const removeFile = (id: string) => {
-        setFile(null);
-        showMessage('File removed successfully!', 'success');
-    };
-
     const handleUpload = async (fileData?: FileData) => {
         const targetFile = fileData || file;
         
@@ -141,19 +136,17 @@ const UploadFiles: FunctionComponent = () => {
         
         try {
             // Simulate upload process
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Here you would typically upload the file to your server
             console.log('File to upload:', targetFile.file);
             
             showMessage(`Successfully uploaded "${targetFile.file.name}"!`, 'success');
             
-            // Reset after successful upload
+            // Redirect to loading page after successful upload
             setTimeout(() => {
-                setFile(null);
-                setMessage(null);
-                setIsUploading(false);
-            }, 2000);
+                window.location.href = 'https://www.adaptaly.com/loadingpage';
+            }, 1500);
             
         } catch (error) {
             showMessage('Upload failed. Please try again.', 'error');
