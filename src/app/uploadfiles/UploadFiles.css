@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap');
+
+body {
+  	margin: 0; line-height: normal;
+}
+
+.upload-your-notes {
+    position: absolute;
+    top: 20px;
+    left: 25px;
+    font-size: 22px;
+    line-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 450px;
+}
+.drag-or-drop {
+    position: absolute;
+    top: 29px;
+    left: calc(50% - 88px);
+    line-height: 30px;
+}
+.or {
+    position: absolute;
+    top: 69px;
+    left: calc(50% - 6px);
+    font-size: 10px;
+    line-height: 30px;
+}
+.upload-files {
+    position: relative;
+    line-height: 30px;
+}
+.upload-files-wrapper {
+    position: absolute;
+    top: 108px;
+    left: calc(50% - 75px);
+    border-radius: 12px;
+    background-color: #fff;
+    width: 150px;
+    height: 40px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #4bc3b7;
+}
+.drag-or-drop-your-files-parent {
+    position: absolute;
+    top: 74px;
+    left: 24px;
+    border: 2px dashed #fff;
+    box-sizing: border-box;
+    width: 452px;
+    height: 202px;
+    overflow: hidden;
+    font-size: 16px;
+}
+.max-size-300 {
+    position: absolute;
+    top: 285px;
+    left: 110px;
+    line-height: 30px;
+}
+.supported-file-types {
+    position: absolute;
+    top: 285px;
+    left: 243px;
+    line-height: 30px;
+}
+.upload-your-notes-parent {
+    position: absolute;
+    top: 198px;
+    left: 468px;
+    border-radius: 12px;
+    background-color: #4bc3b7;
+    border: 2px solid #1e1e1e;
+    box-sizing: border-box;
+    width: 504px;
+    height: 324px;
+    overflow: hidden;
+}
+.uploadfiles {
+    width: 100%;
+    position: relative;
+    background-color: #f8fafc;
+    height: 700px;
+    overflow: hidden;
+    text-align: center;
+    font-size: 10px;
+    color: #fff;
+    font-family: Inter;
+}
