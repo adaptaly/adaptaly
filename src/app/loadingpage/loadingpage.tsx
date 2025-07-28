@@ -1,5 +1,5 @@
 import { FunctionComponent } from 'react';
-import './LoadingFiles.css';
+import './loadingpage.css';
 
 
 const LoadingFiles:FunctionComponent = () => {
