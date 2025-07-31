@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import formidable from "formidable";
+import formidable, { Files, File, Fields } from "formidable";
 import pdf from "pdf-parse";
 import mammoth from "mammoth";
 import OpenAI from "openai";
@@ -13,8 +13,8 @@ export const config = {
 };
 
 // Helper to extract text based on extension
-async function extractTextFromFile(filePath: string, originalFilename: string) {
-  const ext = originalFilename.split('.').pop()?.toLowerCase();
+async function extractTextFromFile(filePath: string, originalFilename: string): Promise<string> {
+  const ext = originalFilename.split(".").pop()?.toLowerCase();
   if (ext === "pdf") {
     const buffer = fs.readFileSync(filePath);
     const data = await pdf(buffer);
@@ -34,17 +34,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const form = formidable({ multiples: false });
-  form.parse(req, async (err, fields, files) => {
+  form.parse(req, async (err, _fields: Fields, files: Files) => {
     try {
       if (err) {
         console.error("Formidable error:", err);
         return res.status(500).json({ error: "Form parse error" });
       }
-      const fileObj: any = files.file;
+
+      const fileObj = files.file as File | File[] | undefined;
       if (!fileObj) return res.status(400).json({ error: "No file received" });
 
       const file = Array.isArray(fileObj) ? fileObj[0] : fileObj;
-      if (!file.filepath || !file.originalFilename) return res.status(400).json({ error: "File path or name not found" });
+      if (!file.filepath || !file.originalFilename) {
+        return res.status(400).json({ error: "File path or name not found" });
+      }
 
       // Extract text depending on file type
       const extractedText = await extractTextFromFile(file.filepath, file.originalFilename);
@@ -70,9 +73,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const summary = completion.choices[0].message.content;
       res.status(200).json({ summary });
-    } catch (err: any) {
-      console.error("API Error:", err);
-      res.status(500).json({ error: err.message || "Server error" });
+    } catch (error) {
+      const e = error as Error;
+      console.error("API Error:", e);
+      res.status(500).json({ error: e.message || "Server error" });
     }
   });
 }
