@@ -1,220 +1,147 @@
 "use client";
 
-import { FunctionComponent, useState, useRef, DragEvent, ChangeEvent } from 'react';
-import './UploadFiles.css';
+import { FunctionComponent, useState, useRef, DragEvent, ChangeEvent } from "react";
+import { useRouter } from "next/navigation";
+import "./UploadFiles.css";
 
 interface FileData {
-    file: File;
-    id: string;
+  file: File;
+  id: string;
 }
 
 interface Message {
-    text: string;
-    type: 'error' | 'success' | 'warning';
+  text: string;
+  type: "error" | "success" | "warning";
 }
 
 const UploadFiles: FunctionComponent = () => {
-    const [file, setFile] = useState<FileData | null>(null);
-    const [message, setMessage] = useState<Message | null>(null);
-    const [isDragOver, setIsDragOver] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<FileData | null>(null);
+  const [message, setMessage] = useState<Message | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
-    const MAX_FILE_SIZE = 300 * 1024 * 1024; // 300MB in bytes
-    const ALLOWED_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
-    const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt'];
+  const MAX_FILE_SIZE = 300 * 1024 * 1024;
+  const ALLOWED_TYPES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
+  const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt"];
 
-    const showMessage = (text: string, type: Message['type']) => {
-        setMessage({ text, type });
-        setTimeout(() => setMessage(null), 5000);
+  const showMessage = (text: string, type: Message["type"]) => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 5000);
+  };
+
+  const validateFile = (file: File): string | null => {
+    if (file.size > MAX_FILE_SIZE) return `File "${file.name}" is too large. Maximum size is 300MB.`;
+    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
+    if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      return `File "${file.name}" is not supported. Use PDF, DOCX, or TXT.`;
+    }
+    return null;
+  };
+
+  const processFiles = async (fileList: FileList) => {
+    if (fileList.length === 0) return;
+    const selectedFile = fileList[0];
+    const error = validateFile(selectedFile);
+    if (error) return showMessage(error, "error");
+
+    const fileData: FileData = {
+      file: selectedFile,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
     };
 
-    const validateFile = (file: File): string | null => {
-        // Check file size
-        if (file.size > MAX_FILE_SIZE) {
-            return `File "${file.name}" is too large. Maximum size is 300MB.`;
-        }
+    setFile(fileData);
+    showMessage(`File "${selectedFile.name}" selected!`, "success");
 
-        // Check file type
-        const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-        if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(fileExtension)) {
-            return `File "${file.name}" is not a supported format. Only PDF, DOCX, and TXT files are allowed.`;
-        }
+    // ✅ Immediately start upload
+    handleUpload(fileData);
+  };
 
-        return null;
-    };
+  const handleDragEnter = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDragOver(false); };
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); };
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files.length > 0) processFiles(e.dataTransfer.files);
+  };
 
-    const formatFileSize = (bytes: number): string => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    };
+  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) processFiles(e.target.files);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
-    const processFiles = async (fileList: FileList) => {
-        if (fileList.length === 0) return;
-        
-        // Only take the first file
-        const selectedFile = fileList[0];
-        const error = validateFile(selectedFile);
-        
-        if (error) {
-            showMessage(error, 'error');
-            return;
-        }
+  const handleUploadButtonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
 
-        const fileData: FileData = {
-            file: selectedFile,
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
-        };
+  const handleUpload = async (fileData?: FileData) => {
+    const targetFile = fileData || file;
+    if (!targetFile) return showMessage("Please select a file.", "warning");
 
-        setFile(fileData);
-        showMessage(`File "${selectedFile.name}" selected successfully!`, 'success');
-        
-        // Automatically start upload after a brief delay
-        setTimeout(() => {
-            handleUpload(fileData);
-        }, 1000);
-    };
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", targetFile.file);
 
-    const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragOver(true);
-    };
+      console.log("📤 Uploading file:", targetFile.file.name, "size:", targetFile.file.size);
 
-    const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragOver(false);
-    };
+      router.push("/loadingpage");
 
-    const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-    };
+      const res = await fetch("/api/summarize", {
+        method: "POST",
+        body: formData,
+      });
 
-    const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragOver(false);
+      if (!res.ok) {
+        console.error("Server error:", res.status);
+        showMessage("Upload failed. Server error.", "error");
+        setIsUploading(false);
+        return;
+      }
 
-        const droppedFiles = e.dataTransfer.files;
-        if (droppedFiles.length > 0) {
-            processFiles(droppedFiles);
-        }
-    };
+      const data = await res.json();
+      console.log("✅ Summary:", data.summary);
+    } catch (error) {
+      console.error(error);
+      showMessage("Upload failed. Try again.", "error");
+      setIsUploading(false);
+    }
+  };
 
-    const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const selectedFiles = e.target.files;
-        if (selectedFiles && selectedFiles.length > 0) {
-            processFiles(selectedFiles);
-        }
-        // Reset input value to allow selecting the same file again
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-    };
-
-    const handleUploadButtonClick = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (fileInputRef.current) {
-            fileInputRef.current.click();
-        }
-    };
-
-    const handleUpload = async (fileData?: FileData) => {
-        const targetFile = fileData || file;
-        
-        if (!targetFile) {
-            showMessage('Please select a file to upload.', 'warning');
-            return;
-        }
-
-        setIsUploading(true);
-        
-        try {
-            // Quick upload simulation
-            await new Promise(resolve => setTimeout(resolve, 800));
-            
-            // Here you would typically upload the file to your server
-            console.log('File to upload:', targetFile.file);
-            
-            // Redirect immediately after upload
-            window.location.href = 'https://www.adaptaly.com/loadingpage';
-            
-        } catch (error) {
-            showMessage('Upload failed. Please try again.', 'error');
-            setIsUploading(false);
-        }
-    };
-
-    return (
-        <div className="uploadfiles">
-            <div className="upload-your-notes-parent">
-                <b className="upload-your-notes">Upload your Notes</b>
-                
-                <div 
-                    className={`drag-or-drop-your-files-parent ${isDragOver ? 'drag-over' : ''}`}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                >
-                    <b className="drag-or-drop">
-                        {isUploading ? 'Uploading...' : 'Drag or Drop your files'}
-                    </b>
-                    <b className="or">Or</b>
-                    
-                    <div className="upload-files-wrapper" onClick={handleUploadButtonClick}>
-                        <b className="upload-files">
-                            {isUploading ? 'Uploading...' : 'Upload files'}
-                        </b>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            className="file-input"
-                            accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-                            onChange={handleFileInputChange}
-                            disabled={isUploading}
-                        />
-                    </div>
-
-                    {isUploading && (
-                        <>
-                            <div className="upload-progress">
-                                <div className="progress-bar" style={{ width: '100%' }}></div>
-                            </div>
-                            <div className="uploading-text">Uploading...</div>
-                        </>
-                    )}
-                </div>
-
-                <b className="max-size-300">Max size: 300 MB</b>
-                <b className="supported-file-types">Supported file types: PDF, DOCX, TXT</b>
-
-                {message && (
-                    <div className={`message ${message.type}-message`}>
-                        {message.text}
-                    </div>
-                )}
-
-                {file && !isUploading && (
-                    <div className="file-list">
-                        <div className="file-item">
-                            <div className="file-name" title={file.file.name}>
-                                {file.file.name}
-                            </div>
-                            <div className="file-size">
-                                {formatFileSize(file.file.size)}
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
+  return (
+    <div className="uploadfiles">
+      <div className="upload-your-notes-parent">
+        <b className="upload-your-notes">Upload your Notes</b>
+        <div
+          className={`drag-or-drop-your-files-parent ${isDragOver ? "drag-over" : ""}`}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <b className="drag-or-drop">{isUploading ? "Uploading..." : "Drag or Drop your files"}</b>
+          <b className="or">Or</b>
+          <div className="upload-files-wrapper" onClick={handleUploadButtonClick}>
+            <b className="upload-files">{isUploading ? "Uploading..." : "Upload files"}</b>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="file-input"
+              accept=".pdf,.docx,.txt"
+              onChange={handleFileInputChange}
+              disabled={isUploading}
+            />
+          </div>
         </div>
-    );
+        <b className="max-size-300">Max size: 300 MB</b>
+        <b className="supported-file-types">Supported: PDF, DOCX, TXT</b>
+        {message && <div className={`message ${message.type}-message`}>{message.text}</div>}
+      </div>
+    </div>
+  );
 };
 
 export default UploadFiles;
