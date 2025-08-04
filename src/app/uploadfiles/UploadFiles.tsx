@@ -1,8 +1,22 @@
 "use client";
 
-import { FunctionComponent, useState, useRef, DragEvent, ChangeEvent } from "react";
+import {
+  FunctionComponent,
+  useState,
+  useRef,
+  DragEvent,
+  ChangeEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import "./UploadFiles.css";
+
+type Flashcard = { question: string; answer: string };
+type SummarizeResponse = {
+  summary: string;
+  flashcards?: Flashcard[];
+  filename?: string;
+  error?: string;
+};
 
 interface FileData {
   file: File;
@@ -14,6 +28,33 @@ interface Message {
   type: "error" | "success" | "warning";
 }
 
+/** ---- Storage keys (used by Loading + Result pages) ---- */
+const STORAGE = {
+  summary: "adaptaly:summary",
+  flashcards: "adaptaly:flashcards",
+  meta: "adaptaly:meta",
+  status: "adaptaly:status", // "pending" | "done" | "error"
+  error: "adaptaly:error",
+} as const;
+
+/** ---- Client-side rules (aligned to server) ---- */
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_TYPES = [
+  "text/plain",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+const ALLOWED_EXTENSIONS = [".txt", ".md", ".pdf", ".docx"];
+
+/* Sanitize long/HTML errors into a short readable message */
+function sanitizeError(raw: string, status?: number): string {
+  if (!raw) return status ? `Server error (${status}).` : "Server error.";
+  const noTags = raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const trimmed = noTags.slice(0, 300);
+  const suffix = noTags.length > 300 ? " …" : "";
+  return status ? `${trimmed}${suffix} (HTTP ${status})` : `${trimmed}${suffix}`;
+}
+
 const UploadFiles: FunctionComponent = () => {
   const [file, setFile] = useState<FileData | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
@@ -22,45 +63,117 @@ const UploadFiles: FunctionComponent = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const MAX_FILE_SIZE = 300 * 1024 * 1024;
-  const ALLOWED_TYPES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"];
-  const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt"];
-
   const showMessage = (text: string, type: Message["type"]) => {
     setMessage({ text, type });
-    setTimeout(() => setMessage(null), 5000);
+    // Keep visible longer so it can be read
+    setTimeout(() => setMessage(null), 7000);
   };
 
-  const validateFile = (file: File): string | null => {
-    if (file.size > MAX_FILE_SIZE) return `File "${file.name}" is too large. Maximum size is 300MB.`;
-    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
-    if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(fileExtension)) {
-      return `File "${file.name}" is not supported. Use PDF, DOCX, or TXT.`;
+  const validateFile = (f: File): string | null => {
+    if (f.size > MAX_FILE_SIZE)
+      return `“${f.name}” is too large. Max size is 10 MB.`;
+    const ext = "." + (f.name.split(".").pop() || "").toLowerCase();
+    if (!ALLOWED_TYPES.includes(f.type) && !ALLOWED_EXTENSIONS.includes(ext)) {
+      return `“${f.name}” is not supported. Use TXT, MD, PDF, or DOCX.`;
     }
     return null;
   };
 
+  // ---------- robust upload flow ----------
+  async function startSummarize(fd: FormData, filename: string) {
+    try {
+      const res = await fetch("/api/summarize", { method: "POST", body: fd });
+
+      if (!res.ok) {
+        // Pull best message (JSON first, else text), then sanitize
+        let msg = "";
+        try {
+          const maybeJson = await res.clone().json();
+          msg = (maybeJson?.error as string) || "";
+        } catch {
+          msg = await res.text().catch(() => "");
+        }
+
+        if (res.status === 413) {
+          throw new Error("File too large for the server (max 10 MB).");
+        }
+        if (res.status === 422) {
+          throw new Error(msg || "We couldn’t read text from that file.");
+        }
+        throw new Error(sanitizeError(msg, res.status));
+      }
+
+      const data = (await res.json()) as SummarizeResponse;
+
+      localStorage.setItem(STORAGE.summary, data.summary ?? "");
+      localStorage.setItem(
+        STORAGE.flashcards,
+        JSON.stringify(data.flashcards ?? [])
+      );
+      localStorage.setItem(
+        STORAGE.meta,
+        JSON.stringify({
+          filename,
+          processedAtISO: new Date().toISOString(),
+        })
+      );
+      localStorage.setItem(STORAGE.status, "done");
+    } catch (e: any) {
+      const friendly = sanitizeError(e?.message || "Unexpected error.");
+      localStorage.setItem(STORAGE.error, friendly);
+      localStorage.setItem(STORAGE.status, "error");
+    }
+  }
+
+  function beginUpload(fd: FormData, filename: string) {
+    // Clear previous run so Loading doesn't redirect early
+    localStorage.removeItem(STORAGE.summary);
+    localStorage.removeItem(STORAGE.flashcards);
+    localStorage.removeItem(STORAGE.meta);
+    localStorage.removeItem(STORAGE.error);
+    localStorage.setItem(STORAGE.status, "pending");
+
+    // Fire-and-forget; the Loading page polls and redirects
+    void startSummarize(fd, filename);
+    router.push("/loadingpage");
+  }
+  // ----------------------------------------
+
   const processFiles = async (fileList: FileList) => {
     if (fileList.length === 0) return;
     const selectedFile = fileList[0];
+
     const error = validateFile(selectedFile);
     if (error) return showMessage(error, "error");
 
     const fileData: FileData = {
       file: selectedFile,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      id:
+        Date.now().toString() +
+        Math.random().toString(36).substring(2, 11),
     };
 
     setFile(fileData);
-    showMessage(`File "${selectedFile.name}" selected!`, "success");
+    showMessage(`“${selectedFile.name}” selected.`, "success");
 
-    // ✅ Immediately start upload
-    handleUpload(fileData);
+    // Start upload + analysis immediately
+    setIsUploading(true);
+    const fd = new FormData();
+    fd.append("file", selectedFile);
+    beginUpload(fd, selectedFile.name);
   };
 
-  const handleDragEnter = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDragOver(true); };
-  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); setIsDragOver(false); };
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); };
+  const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -74,71 +187,62 @@ const UploadFiles: FunctionComponent = () => {
 
   const handleUploadButtonClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (fileInputRef.current) fileInputRef.current.click();
-  };
-
-  const handleUpload = async (fileData?: FileData) => {
-    const targetFile = fileData || file;
-    if (!targetFile) return showMessage("Please select a file.", "warning");
-
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", targetFile.file);
-
-      console.log("📤 Uploading file:", targetFile.file.name, "size:", targetFile.file.size);
-
-      router.push("/loadingpage");
-
-      const res = await fetch("/api/summarize", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        console.error("Server error:", res.status);
-        showMessage("Upload failed. Server error.", "error");
-        setIsUploading(false);
-        return;
-      }
-
-      const data = await res.json();
-      console.log("✅ Summary:", data.summary);
-    } catch (error) {
-      console.error(error);
-      showMessage("Upload failed. Try again.", "error");
-      setIsUploading(false);
-    }
+    fileInputRef.current?.click();
   };
 
   return (
     <div className="uploadfiles">
       <div className="upload-your-notes-parent">
         <b className="upload-your-notes">Upload your Notes</b>
+
         <div
-          className={`drag-or-drop-your-files-parent ${isDragOver ? "drag-over" : ""}`}
+          className={`drag-or-drop-your-files-parent ${
+            isDragOver ? "drag-over" : ""
+          }`}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
+          onClick={handleUploadButtonClick}
         >
-          <b className="drag-or-drop">{isUploading ? "Uploading..." : "Drag or Drop your files"}</b>
+          <b className="drag-or-drop">
+            {isUploading ? "Uploading..." : "Drag or Drop your files"}
+          </b>
           <b className="or">Or</b>
-          <div className="upload-files-wrapper" onClick={handleUploadButtonClick}>
-            <b className="upload-files">{isUploading ? "Uploading..." : "Upload files"}</b>
+
+          <div className="upload-files-wrapper">
+            <b className="upload-files">
+              {isUploading ? "Uploading..." : "Upload files"}
+            </b>
             <input
               ref={fileInputRef}
               type="file"
               className="file-input"
-              accept=".pdf,.docx,.txt"
+              accept=".txt,.md,.pdf,.docx"
               onChange={handleFileInputChange}
               disabled={isUploading}
             />
           </div>
+
+          {isUploading && (
+            <>
+              <div className="upload-progress">
+                <div className="progress-bar" style={{ width: "100%" }} />
+              </div>
+              <div className="uploading-text">Starting analysis…</div>
+            </>
+          )}
         </div>
-        <b className="max-size-300">Max size: 300 MB</b>
-        <b className="supported-file-types">Supported: PDF, DOCX, TXT</b>
-        {message && <div className={`message ${message.type}-message`}>{message.text}</div>}
+
+        {/* Updated caps to match server */}
+        <b className="max-size-300">Max size: 10 MB</b>
+        <b className="supported-file-types">Supported: TXT, MD, PDF, DOCX</b>
+
+        {message && (
+          <div className={`message ${message.type}-message`}>
+            {message.text}
+          </div>
+        )}
       </div>
     </div>
   );

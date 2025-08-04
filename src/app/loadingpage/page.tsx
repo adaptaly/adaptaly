@@ -1,5 +1,7 @@
-import LoadingPage from "./loadingpage";
+"use client";
+
+import LoadingFiles from "./loadingpage";
 
 export default function Page() {
-  return <LoadingPage />;
+  return <LoadingFiles />;
 }
