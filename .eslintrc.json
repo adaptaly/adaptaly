@@ -1,0 +1,24 @@
+{
+    "root": true,
+    "extends": ["next/core-web-vitals", "plugin:@typescript-eslint/recommended"],
+    "parserOptions": { "project": false },
+    "rules": {
+      "@typescript-eslint/no-explicit-any": "off",
+      "react-hooks/exhaustive-deps": "warn",
+      "@next/next/no-html-link-for-pages": "off"
+    },
+    "overrides": [
+      {
+        "files": ["src/app/**/*.ts", "src/app/**/*.tsx"],
+        "rules": {
+          "@typescript-eslint/no-explicit-any": "warn"
+        }
+      },
+      {
+        "files": ["src/app/api/**/*.ts"],
+        "rules": {
+          "@typescript-eslint/no-explicit-any": "off"
+        }
+      }
+    ]
+  }  

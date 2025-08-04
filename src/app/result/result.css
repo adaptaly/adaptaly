@@ -301,3 +301,11 @@ body{ background:var(--page-bg); color:var(--text); margin:0; }
 .ut-strong{ font-weight:900; color:#0f172a; }
 .ut-action{ font-weight:900; color:#0f766e; }
 .ut-mono{ font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; font-size:12px; color:#334155; }
+/* ===== Auth modal ===== */
+.modal-back{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50;}
+.modal{background:#fff;border-radius:14px;padding:20px 24px;width:320px;}
+
+/* segmented buttons (used on Usage page) */
+.seg{display:flex;gap:6px;background:#f1f5f9;padding:4px;border-radius:12px;border:1px solid var(--card-border);}
+.seg-btn{appearance:none;border:none;background:transparent;padding:6px 10px;border-radius:8px;font-weight:900;color:#334155;cursor:pointer;}
+.seg-btn.active{background:#fff;color:#0f172a;border:1px solid var(--card-border);}
