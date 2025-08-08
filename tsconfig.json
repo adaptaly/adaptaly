@@ -35,7 +35,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts" // ✅ required by Next.js 13+
-  ],
+, "tailwind.config.tjs"  ],
   "exclude": [
     "node_modules"
   ],
