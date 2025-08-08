@@ -1,47 +1,31 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
-    "baseUrl": ".", // ✅ required for aliasing
+    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ] // ✅ makes @/components/... etc. work
+      "@/*": ["src/*"],
+      "@/lib/*": ["src/lib/*"]
     },
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
+    "plugins": [{ "name": "next" }]
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts" // ✅ required by Next.js 13+
-, "tailwind.config.tjs"  ],
-  "exclude": [
-    "node_modules"
+    ".next/types/**/*.ts"
   ],
-  "plugins": [
-    {
-      "name": "next"
-    } // ✅ ensures better dev experience
-  ]
+  "exclude": ["node_modules"]
 }

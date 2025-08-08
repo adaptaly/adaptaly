@@ -1,9 +1,7 @@
 "use client";
 
-import Signup from "../auth/signup/signup";
+import Signup from "./signup";
 
 export default function Page() {
   return <Signup />;
 }
-
-

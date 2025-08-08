@@ -129,3 +129,29 @@
   .btn { height: 48px; }
   .signup-title { font-size: 24px; }
 }
+/* Back button */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 12px;
+  transition: color 0.2s ease;
+}
+
+.back-btn:hover,
+.back-btn:focus-visible {
+  color: var(--primary-dark);
+  outline: none;
+}
+
+.back-icon {
+  width: 18px;
+  height: 18px;
+}

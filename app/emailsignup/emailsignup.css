@@ -47,7 +47,7 @@ html, body{
   position:relative;
 }
 
-/* Back pill (button) — also offset for notches */
+/* Back pill (button) — default absolute for roomy screens */
 .es-topbar{
   position:absolute;
   left:max(14px, calc(env(safe-area-inset-left) + 8px));
@@ -243,6 +243,26 @@ html, body{
 .link:hover{ text-decoration:underline; }
 .small{ opacity:.95; }
 
+/* --- MOBILE FIX: prevent Back button overlapping the title --- */
+@media (max-width:640px){
+  /* Put the back button in normal flow so it stacks above the header */
+  .es-topbar{
+    position:static;
+    left:auto; top:auto;
+    margin-bottom:12px;
+  }
+
+  /* Remove top padding on header now that back button is stacked */
+  .es-head{ padding-top:0; }
+
+  /* Slightly smaller title + wrap safety */
+  .es-title{
+    font-size:22px;
+    line-height:1.25;
+    word-break:break-word;
+  }
+}
+
 /* Mobile tweaks — also respect safe-area on very small screens */
 @media (max-width:420px){
   .es-background{
@@ -261,4 +281,63 @@ html, body{
 @media (prefers-reduced-motion:reduce){
   .es-btn-primary{ transition:background-color 100ms ease; }
   .es-strength .bar::after{ transition:none; }
+}
+
+/* Keep the top bar from overlapping text on small screens */
+.es-topbar.es-topbar--safe {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 6px;
+}
+
+/* Confirmation layout */
+.es-head--confirm {
+  margin-top: 6px;
+}
+
+.es-provider-actions {
+  margin-top: 16px;
+}
+
+.es-provider-hint {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+}
+
+.es-provider-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.es-btn-secondary {
+  appearance: none;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  color: #0b0b0f;
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+
+.es-btn-secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.07);
+  border-color: rgba(0,0,0,0.16);
+}
+
+.es-btn-secondary.is-suggested {
+  border-color: #4BC3B7;
+  background: color-mix(in srgb, #4BC3B7 8%, white);
+}
+
+.es-provider-note {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 13px;
 }

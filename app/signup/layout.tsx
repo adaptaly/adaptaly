@@ -1,6 +1,6 @@
-import '../auth/signup/signup.css'
+import './signup.css'
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function SignupLayout({ children }: { children: React.ReactNode }) {
   return children as React.ReactElement;
 }
 

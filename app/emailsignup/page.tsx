@@ -1,60 +1,18 @@
+// app/emailsignup/page.tsx
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabaseBrowser } from '@/lib/supabaseClient';
 import './emailsignup.css';
 
-type PasswordChecks = {
-  lengthOk: boolean;
-  numberOk: boolean;
-  specialOk: boolean;
-};
-
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
-const COMMON_DOMAINS = ['gmail.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'yahoo.com'];
-const DOMAIN_TYPO_MAP: Record<string, string> = {
-  'gmal.com': 'gmail.com',
-  'gmial.com': 'gmail.com',
-  'gnail.com': 'gmail.com',
-  'hotmial.com': 'hotmail.com',
-  'hotmai.com': 'hotmail.com',
-  'yaho.com': 'yahoo.com',
-};
-
-function getPasswordChecks(pw: string): PasswordChecks {
-  return {
-    lengthOk: pw.length >= 8,
-    numberOk: /[0-9]/.test(pw),
-    specialOk: /[^A-Za-z0-9]/.test(pw),
-  };
-}
-
-function scorePassword(pw: string): { score: number; label: string } {
-  if (!pw) return { score: 0, label: 'Too weak' };
-  let score = 0;
-  if (pw.length >= 8) score++;
-  if (pw.length >= 12) score++;
-  if (/[0-9]/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-  const label = ['Too weak', 'Weak', 'Okay', 'Good', 'Strong'][Math.min(score, 4)];
-  return { score: Math.min(score, 4), label };
-}
-
-function suggestEmailDomain(email: string): string | null {
-  const parts = email.split('@');
-  if (parts.length !== 2) return null;
-  const domain = parts[1].toLowerCase();
-  if (COMMON_DOMAINS.includes(domain)) return null;
-  if (DOMAIN_TYPO_MAP[domain]) return parts[0] + '@' + DOMAIN_TYPO_MAP[domain];
-  if (['gmailcom', 'outlookcom', 'hotmailcom', 'icloudcom', 'yahoocom'].includes(domain)) {
-    const fixed = domain.replace('com', '.com');
-    return parts[0] + '@' + fixed;
-  }
-  return null;
-}
+const hasNumber = (s: string) => /\d/.test(s);
+const hasSpecial = (s: string) => /[^A-Za-z0-9]/.test(s);
 
 export default function EmailSignupPage() {
   const router = useRouter();
+  const supabase = supabaseBrowser();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -65,55 +23,166 @@ export default function EmailSignupPage() {
   const [touched, setTouched] = useState({ name: false, email: false, pw: false });
   const [submitting, setSubmitting] = useState(false);
   const [errorSummary, setErrorSummary] = useState<string | null>(null);
-  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
+  const [showCheckEmail, setShowCheckEmail] = useState(false);
 
-  const checks = useMemo(() => getPasswordChecks(pw), [pw]);
-  const { score: pwScore, label: pwLabel } = useMemo(() => scorePassword(pw), [pw]);
-
-  const nameValid = useMemo(() => name.trim().length > 1, [name]);
+  const nameValid = useMemo(() => name.trim().length >= 2, [name]);
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
-  const pwValid   = useMemo(() => checks.lengthOk && checks.numberOk && checks.specialOk, [checks]);
+  const pwRules = useMemo(
+    () => ({
+      len: pw.length >= 8,
+      num: hasNumber(pw),
+      sym: hasSpecial(pw),
+    }),
+    [pw]
+  );
+  const pwValid = pwRules.len && pwRules.num && pwRules.sym;
   const formValid = nameValid && emailValid && pwValid;
 
-  useEffect(() => {
-    setEmailSuggestion(suggestEmailDomain(email.trim()));
-  }, [email]);
+  const strength = useMemo(() => {
+    let s = 0;
+    if (pwRules.len) s++;
+    if (pwRules.num) s++;
+    if (pwRules.sym) s++;
+    if (pw.length >= 12) s++;
+    return Math.min(s, 4);
+  }, [pwRules, pw.length]);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  function providerUrlGuess() {
+    const domain = email.split('@')[1]?.toLowerCase() || '';
+    if (domain.includes('gmail') || domain.includes('googlemail')) {
+      return { primary: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
+    }
+    if (domain.includes('outlook') || domain.includes('hotmail') || domain.includes('live')) {
+      return { primary: 'outlook', url: 'https://outlook.live.com/mail/0/inbox' };
+    }
+    return { primary: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
+  }
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched({ name: true, email: true, pw: true });
 
     if (!formValid) {
-      const problems = [];
+      const problems: string[] = [];
       if (!nameValid) problems.push('Enter your full name.');
       if (!emailValid) problems.push('Enter a valid email address.');
-      if (!pwValid) problems.push('Choose a stronger password.');
+      if (!pwValid) problems.push('Password must be at least 8 chars, include a number and a symbol.');
       setErrorSummary(problems.join(' '));
       return;
     }
 
     setErrorSummary(null);
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      // TODO: integrate API
-      await new Promise((r) => setTimeout(r, 900));
-      // router.push('/dashboard');
+      // 1) **Server check**: is this email already used?
+      const res = await fetch('/api/auth/email-exists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      if (res.ok) {
+        const { exists } = await res.json();
+        if (exists) {
+          setErrorSummary('An account with this email already exists. Try signing in instead.');
+          setEmail('');            // clear the email field
+          return;                  // stop here – do NOT signUp and do NOT show “check your email”
+        }
+      } else {
+        // If the check fails for some reason, fall back to the client error we’ll catch below
+        // (we still try the signUp; you can choose to block instead if you prefer)
+      }
+
+      // 2) Proceed to sign up (only if not existing)
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: pw,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/callback?next=/dashboard`,
+          data: { full_name: name.trim() },
+        },
+      });
+
+      if (error) {
+        // Catch any “already registered” returned by Supabase as well (double safety)
+        if (/already\s*registered/i.test(error.message) || /user.*exists/i.test(error.message)) {
+          setErrorSummary('An account with this email already exists. Try signing in instead.');
+          setEmail('');
+          return;
+        }
+        setErrorSummary(error.message);
+        return;
+      }
+
+      // Success → show confirmation notice
+      setShowCheckEmail(true);
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (showCheckEmail) {
+    const guess = providerUrlGuess();
+
+    return (
+      <main className="es-background">
+        <section className="es-card" aria-live="polite">
+          <div className="es-topbar es-topbar--safe">
+            <button
+              type="button"
+              className="es-back"
+              onClick={() => router.push('/signin')}
+              aria-label="Back to sign in"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Back to sign in</span>
+            </button>
+          </div>
+
+          <header className="es-head es-head--confirm">
+            <h1 className="es-title">Check your email</h1>
+            <p className="es-subtitle">
+              We sent a confirmation link to <strong>{email}</strong>. Click it to finish creating your account.
+            </p>
+          </header>
+
+          <div className="es-provider-actions">
+            <p className="es-provider-hint">Open your inbox:</p>
+            <div className="es-provider-buttons">
+              <a
+                className={`es-btn-secondary ${providerUrlGuess().primary === 'gmail' ? 'is-suggested' : ''}`}
+                href="https://mail.google.com/mail/u/0/#inbox"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Gmail
+              </a>
+              <a
+                className={`es-btn-secondary ${providerUrlGuess().primary === 'outlook' ? 'is-suggested' : ''}`}
+                href="https://outlook.live.com/mail/0/inbox"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Outlook
+              </a>
+            </div>
+
+            <p className="es-provider-note">
+              Didn’t get an email? Check your spam folder, or wait a minute and try again.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="es-background" role="main">
       <section className="es-card" aria-labelledby="es-title">
-        {/* Functional back button */}
-        <div className="es-topbar">
-          <button
-            type="button"
-            className="es-back"
-            onClick={() => router.back()}
-            aria-label="Go back"
-          >
+        <div className="es-topbar es-topbar--safe">
+          <button type="button" className="es-back" onClick={() => router.back()} aria-label="Go back">
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -132,33 +201,26 @@ export default function EmailSignupPage() {
           </div>
         )}
 
-        <form className="es-form" onSubmit={onSubmit} noValidate>
+        <form className="es-form" onSubmit={submit} noValidate>
           {/* Name */}
           <div className="es-field">
             <label htmlFor="name" className="es-label">Full name</label>
-            <div className={`es-input-wrap ${touched.name && !nameValid ? 'is-invalid' : ''} ${nameValid ? 'is-valid' : ''}`}>
+            <div className={`es-input-wrap ${touched.name && !nameValid ? 'is-invalid' : ''}`}>
               <input
                 id="name"
                 type="text"
-                inputMode="text"
-                autoCapitalize="words"
-                autoComplete="name"
                 className="es-input"
                 placeholder="Chris Post"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                 aria-invalid={touched.name && !nameValid}
-                aria-describedby="name-help"
               />
-              {nameValid && (
-                <svg className="es-valid-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
             </div>
-            <div id="name-help" className="es-hint">
-              {touched.name && !nameValid ? 'Please enter your full name.' : 'Use your real name for your learning profile.'}
+            <div className="es-hint">
+              {touched.name && !nameValid
+                ? 'Enter your real name for your learning profile.'
+                : 'Use your real name for your learning profile.'}
             </div>
           </div>
 
@@ -182,7 +244,6 @@ export default function EmailSignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                 aria-invalid={touched.email && !emailValid}
-                aria-describedby="email-help"
               />
               {emailValid && (
                 <svg className="es-valid-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -190,18 +251,11 @@ export default function EmailSignupPage() {
                 </svg>
               )}
             </div>
-            <div id="email-help" className="es-hint">
-              {touched.email && !emailValid ? 'Enter a valid email like name@example.com.' : 'We will send a confirmation to this address.'}
+            <div className="es-hint">
+              {touched.email && !emailValid
+                ? 'Enter a valid email like name@example.com.'
+                : 'We will send a confirmation to this address.'}
             </div>
-            {emailSuggestion && email && (
-              <div className="es-suggest" role="note">
-                Did you mean{' '}
-                <button type="button" className="es-suggest-btn" onClick={() => setEmail(emailSuggestion)}>
-                  {emailSuggestion}
-                </button>
-                ?
-              </div>
-            )}
           </div>
 
           {/* Password */}
@@ -224,7 +278,7 @@ export default function EmailSignupPage() {
                 onBlur={() => setTouched((t) => ({ ...t, pw: true }))}
                 onKeyUp={(e) => setCapsLock(e.getModifierState && e.getModifierState('CapsLock'))}
                 aria-invalid={touched.pw && !pwValid}
-                aria-describedby="pw-help"
+                onKeyDown={(e) => { if (e.key === 'Enter') submit(e as unknown as React.FormEvent); }}
               />
               <button
                 type="button"
@@ -236,7 +290,7 @@ export default function EmailSignupPage() {
                   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                     <path d="M10.6 10.6a3 3 0 004.24 4.24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                    <path d="M2 12s4-7 10-7 10 7 10 7-1.2 2.1-3.2 3.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+                    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
                   </svg>
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -249,37 +303,38 @@ export default function EmailSignupPage() {
 
             {capsLock && <div className="es-caps" role="note">Caps Lock is on.</div>}
 
-            <ul id="pw-help" className="es-checks" aria-live="polite">
-              <li className={checks.lengthOk ? 'ok' : 'no'}>At least 8 characters</li>
-              <li className={checks.numberOk ? 'ok' : 'no'}>At least 1 number</li>
-              <li className={checks.specialOk ? 'ok' : 'no'}>At least 1 special symbol</li>
+            <ul className="es-checks" aria-live="polite">
+              <li className={pwRules.len ? 'ok' : ''}>At least 8 characters</li>
+              <li className={pwRules.num ? 'ok' : ''}>At least 1 number</li>
+              <li className={pwRules.sym ? 'ok' : ''}>At least 1 special symbol</li>
             </ul>
 
-            <div className="es-strength" aria-hidden={!pw}>
-              <div className={`bar s-${pwScore}`} />
-              <span className="label">{pw ? pwLabel : ' '}</span>
+            <div className="es-strength">
+              <div className={`bar s-${strength}`} />
+              <span className="label">
+                {strength <= 1 ? 'Weak' : strength === 2 ? 'Okay' : strength === 3 ? 'Good' : 'Strong'}
+              </span>
             </div>
           </div>
 
-          {/* Legal + CTA */}
-          <div className="es-legal">
+          <p className="es-legal">
             By creating an account, you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a>.
-          </div>
+          </p>
 
-          <div className="es-actions" role="group" aria-label="Form actions">
+          <div className="es-actions">
             <button
               type="submit"
               className="es-btn-primary"
               disabled={!formValid || submitting}
               aria-busy={submitting}
             >
-              {submitting ? 'Creating account…' : 'Create Account'}
+              {submitting ? 'Creating…' : 'Create Account'}
               {submitting && <span className="es-spinner" aria-hidden="true" />}
             </button>
 
             <div className="es-footer">
               <span className="small">Already have an account?</span>
-              <a href="/auth/signin" className="link">Sign in</a>
+              <a href="/signin" className="link">Sign in</a>
             </div>
           </div>
         </form>
