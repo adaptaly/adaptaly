@@ -1,5 +1,8 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
@@ -26,11 +29,9 @@ export default function ResetConfirmPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorSummary, setErrorSummary] = useState<string | null>(null);
 
-  // Check session. The /auth/callback should have set it already.
   useEffect(() => {
     let mounted = true;
     (async () => {
-      // try a quick wait to allow cookies to settle if user arrived from email
       for (let i = 0; i < 4; i++) {
         const { data } = await supabase.auth.getUser();
         if (data.user) {
@@ -88,16 +89,13 @@ export default function ResetConfirmPage() {
         setErrorSummary(error.message || 'Could not update password. Try again.');
         return;
       }
-      // Success → straight to dashboard
       router.replace('/dashboard');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!ready) {
-    return null;
-  }
+  if (!ready) return null;
 
   if (!hasSession) {
     return (
@@ -181,9 +179,9 @@ export default function ResetConfirmPage() {
             </ul>
 
             <div className="r-strength">
-              <div className={`bar s-${strength}`} />
+              <div className={`bar s-${Math.min(Math.max((pwRules.len ? 1 : 0) + (pwRules.num ? 1 : 0) + (pwRules.sym ? 1 : 0) + (pw.length >= 12 ? 1 : 0), 0), 4)}`} />
               <span className="label">
-                {strength <= 1 ? 'Weak' : strength === 2 ? 'Okay' : strength === 3 ? 'Good' : 'Strong'}
+                {!pwValid ? 'Weak' : pw.length >= 12 ? 'Strong' : 'Good'}
               </span>
             </div>
           </div>
