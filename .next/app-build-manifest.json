@@ -23,16 +23,6 @@
       "static/css/app/signup/page.css",
       "static/chunks/app/signup/page.js"
     ],
-    "/auth/callback/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/auth/callback/route.js"
-    ],
-    "/dashboard/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/page.js"
-    ],
     "/emailsignup/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
