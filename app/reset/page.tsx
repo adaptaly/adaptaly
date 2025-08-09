@@ -4,12 +4,19 @@ import ResetClient from './ResetClient';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type PageProps = {
-  searchParams?: { [key: string]: string | string[] | undefined };
-};
+type SearchParams =
+  | Record<string, string | string[] | undefined>
+  | null
+  | undefined;
 
-export default function Page({ searchParams }: PageProps) {
-  const invalidLink = searchParams?.invalidLink === '1';
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const invalidLink = sp?.['invalidLink'] === '1';
+
   return (
     <Suspense fallback={<div />}>
       <ResetClient invalidLink={invalidLink} />
