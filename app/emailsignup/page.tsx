@@ -69,26 +69,31 @@ export default function EmailSignupPage() {
     setSubmitting(true);
 
     try {
-      // Check existence server-side (service role)
+      // server-side existence check
       const existsResp = await fetch('/api/auth/email-exists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
-      }).then(r => r.json()).catch(() => ({ exists: false }));
+      })
+        .then((r) => r.json())
+        .catch(() => ({ exists: false }));
 
       if (existsResp?.exists) {
         setErrorSummary('An account with this email already exists. Try signing in.');
         return;
       }
 
+      // Build redirect WITHOUT referencing `data`
+      const emailRedirectTo = `${siteUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(
+        email.trim(),
+      )}`;
+
       // Start signup
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
         options: {
-          emailRedirectTo: `${siteUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(
-            email.trim(),
-          )}${data?.user?.id ? `&uid=${encodeURIComponent(data.user.id)}` : ''}`,
+          emailRedirectTo,
           data: { full_name: name.trim() },
         },
       });
@@ -98,7 +103,7 @@ export default function EmailSignupPage() {
         return;
       }
 
-      // Set a cookie so we can still recover the email if the client strips params
+      // Set cookie so callback can recover email even if the client strips URL params
       await setPendingCookie(email.trim());
 
       setShowCheckEmail(true);
@@ -128,7 +133,7 @@ export default function EmailSignupPage() {
         return;
       }
 
-      // 2) If already confirmed or similar, fall back to magic sign-in link
+      // 2) Already confirmed → fall back to magic sign-in link
       const { error: otpErr } = await supabase.auth.signInWithOtp({
         email: addr,
         options: { emailRedirectTo },
@@ -216,7 +221,7 @@ export default function EmailSignupPage() {
               placeholder="At least 8 chars, number, symbol"
               autoComplete="new-password"
             />
-            <button type="button" className="es-toggle" onClick={() => setShowPw(s => !s)}>
+            <button type="button" className="es-toggle" onClick={() => setShowPw((s) => !s)}>
               {showPw ? 'Hide' : 'Show'}
             </button>
             {capsLock && <div className="es-hint">Caps Lock is on.</div>}
