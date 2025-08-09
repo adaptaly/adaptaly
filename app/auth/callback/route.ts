@@ -5,11 +5,11 @@ import { supabaseServer } from '@/lib/supabaseServer';
 export async function GET(request: Request) {
   const url = new URL(request.url);
 
-  // Accept optional ?next and ?email; default next to /dashboard
+  // Accept ?next and ?email; default next to /dashboard
   const nextParam = url.searchParams.get('next') || '/dashboard';
   const emailParam = url.searchParams.get('email') || '';
 
-  // If Supabase already told us there's an error, go to /signin with details (and carry email through)
+  // If Supabase sent an error (e.g., otp_expired), forward it to /signin and carry email through
   const error = url.searchParams.get('error');
   if (error) {
     const signin = new URL('/signin', url.origin);
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(signin);
   }
 
-  // If there's an auth code, exchange it for a session
+  // Exchange ?code for a session cookie
   const code = url.searchParams.get('code');
   if (code) {
     const supabase = await supabaseServer();
@@ -51,6 +51,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(signin);
   }
 
-  // Success → into the app
+  // Success → into the app (to ?next=… or /dashboard)
   return NextResponse.redirect(new URL(nextParam, url.origin));
 }

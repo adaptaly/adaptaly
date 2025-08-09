@@ -10,11 +10,13 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const hasNumber = (s: string) => /\d/.test(s);
 const hasSpecial = (s: string) => /[^A-Za-z0-9]/.test(s);
 
-// Use your public site URL in prod (Vercel) and fall back to window.origin locally
+// Canonical base URL: always prefer NEXT_PUBLIC_SITE_URL, fallback to window.origin
 const baseUrl =
-  (typeof window === 'undefined'
-    ? process.env.NEXT_PUBLIC_SITE_URL
-    : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin) || 'https://www.adaptaly.com';
+  (
+    typeof window === 'undefined'
+      ? process.env.NEXT_PUBLIC_SITE_URL
+      : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+  )?.replace(/\/$/, '') || 'https://www.adaptaly.com';
 
 export default function EmailSignupPage() {
   const router = useRouter();
@@ -67,7 +69,7 @@ export default function EmailSignupPage() {
     setErrorSummary(null);
     setSubmitting(true);
     try {
-      // Optional: check first if email exists (your API)
+      // Optional: check email exists
       const res = await fetch('/api/auth/email-exists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,12 +84,11 @@ export default function EmailSignupPage() {
         }
       }
 
-      // ⬇ Include the user's email in the callback so we can prefill on /signin if link is invalid
+      // Include email + next so we can prefill /signin on invalid links
       const redirect = `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(
         email.trim()
       )}`;
 
-      // Send a confirmation link that returns to our callback page
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
@@ -144,27 +145,14 @@ export default function EmailSignupPage() {
           <div className="es-provider-actions">
             <p className="es-provider-hint">Open your inbox:</p>
             <div className="es-provider-buttons">
-              <a
-                className={`es-btn-secondary ${guess.primary === 'gmail' ? 'is-suggested' : ''}`}
-                href="https://mail.google.com/mail/u/0/#inbox"
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a className={`es-btn-secondary ${guess.primary === 'gmail' ? 'is-suggested' : ''}`} href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noreferrer">
                 Open Gmail
               </a>
-              <a
-                className={`es-btn-secondary ${guess.primary === 'outlook' ? 'is-suggested' : ''}`}
-                href="https://outlook.live.com/mail/0/inbox"
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a className={`es-btn-secondary ${guess.primary === 'outlook' ? 'is-suggested' : ''}`} href="https://outlook.live.com/mail/0/inbox" target="_blank" rel="noreferrer">
                 Open Outlook
               </a>
             </div>
-
-            <p className="es-provider-note">
-              Didn’t get an email? Check your spam folder, or wait a minute and try again.
-            </p>
+            <p className="es-provider-note">Didn’t get an email? Check your spam folder, or wait a minute and try again.</p>
           </div>
         </section>
       </main>
@@ -315,12 +303,7 @@ export default function EmailSignupPage() {
           </p>
 
           <div className="es-actions">
-            <button
-              type="submit"
-              className="es-btn-primary"
-              disabled={!formValid || submitting}
-              aria-busy={submitting}
-            >
+            <button type="submit" className="es-btn-primary" disabled={!formValid || submitting} aria-busy={submitting}>
               {submitting ? 'Creating…' : 'Create Account'}
               {submitting && <span className="es-spinner" aria-hidden="true" />}
             </button>

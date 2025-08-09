@@ -6,6 +6,14 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signup.css';
 
+// Canonical base URL: prefer env, fallback to window.origin
+const baseUrl =
+  (
+    typeof window === 'undefined'
+      ? process.env.NEXT_PUBLIC_SITE_URL
+      : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+  )?.replace(/\/$/, '') || 'https://www.adaptaly.com';
+
 export default function SignupChoice() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
@@ -18,11 +26,11 @@ export default function SignupChoice() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // use production host so Supabase does not drop to root
-        redirectTo: `https://www.adaptaly.com/auth/callback?next=/dashboard`,
+        // Always go through our callback and land on /dashboard
+        redirectTo: `${baseUrl}/auth/callback?next=/dashboard`,
       },
     });
-    // OAuth will redirect away
+    // Supabase redirects away
   };
 
   const handleEmailClick = () => {

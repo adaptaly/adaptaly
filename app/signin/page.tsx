@@ -6,10 +6,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
-// Avoid static prerender warnings when using useSearchParams in Next 15
+// Always dynamic due to useSearchParams
 export const dynamic = 'force-dynamic';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+
+// Canonical base URL
+const baseUrl =
+  (
+    typeof window === 'undefined'
+      ? process.env.NEXT_PUBLIC_SITE_URL
+      : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+  )?.replace(/\/$/, '') || 'https://www.adaptaly.com';
 
 type Banner = { kind: 'error' | 'info'; text: string; showResend?: boolean };
 
@@ -27,14 +35,13 @@ function SignInInner() {
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
 
-  // ensure we only handle/clear query+hash once per visit
   const handledParamsOnce = useRef(false);
 
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // If already authenticated, skip to dashboard
+  // If already authenticated, go to /dashboard
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -43,7 +50,7 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Helper: read error + email from query and hash
+  // Parse error + email from query and hash
   function readFromUrl() {
     const q = {
       error: params.get('error'),
@@ -58,9 +65,7 @@ function SignInInner() {
     let hEmail: string | null = null;
 
     if (typeof window !== 'undefined' && window.location.hash) {
-      const raw = window.location.hash.startsWith('#')
-        ? window.location.hash.slice(1)
-        : window.location.hash;
+      const raw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
       const h = new URLSearchParams(raw);
       hError = h.get('error');
       hCode = h.get('error_code');
@@ -76,7 +81,7 @@ function SignInInner() {
     };
   }
 
-  // Show invalid/expired message; capture email; then strip query+hash
+  // Show message once, capture email, then strip query+hash
   useEffect(() => {
     if (handledParamsOnce.current) return;
     const { error, error_code, error_description, email: emailFromUrl } = readFromUrl();
@@ -99,44 +104,37 @@ function SignInInner() {
           showResend: true,
         });
       } else {
-        const text =
-          decodeURIComponent(error_description || error || 'Link invalid. Please sign in again.');
+        const text = decodeURIComponent(error_description || error || 'Link invalid. Please sign in again.');
         setBanner({ kind: 'error', text, showResend: true });
       }
 
-      // Clean the URL (remove query + hash) without a full reload
+      // Clean URL (remove query + hash) so the banner doesn't stick
       router.replace('/signin');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, router]);
 
-  // Resend verification email:
-  // - Prefer the email we parsed from the URL
-  // - Otherwise, use whatever is in the input
+  // Resend verification to known email (prefilled from URL) or typed value
   const resendVerification = async () => {
     const to = email.trim();
     if (!emailRegex.test(to)) {
       setTouched((t) => ({ ...t, email: true }));
-      setBanner({
-        kind: 'error',
-        text: 'Enter a valid email above, then tap “Resend email” again.',
-      });
+      setBanner({ kind: 'error', text: 'Enter a valid email above, then tap “Resend email” again.' });
       return;
     }
 
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: to,
-      options: { emailRedirectTo: `${location.origin}/auth/callback?next=/dashboard&email=${encodeURIComponent(to)}` },
+      options: {
+        emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(to)}`,
+      },
     });
     if (error) {
       setBanner({ kind: 'error', text: error.message });
       return;
     }
-    setBanner({
-      kind: 'info',
-      text: 'Verification email sent. Check your inbox.',
-    });
+    setBanner({ kind: 'info', text: 'Verification email sent. Check your inbox.' });
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -172,12 +170,7 @@ function SignInInner() {
     <main className="si-background" role="main">
       <section className="si-card" aria-labelledby="si-title">
         <div className="si-topbar">
-          <button
-            type="button"
-            className="si-back"
-            onClick={() => router.back()}
-            aria-label="Go back"
-          >
+          <button type="button" className="si-back" onClick={() => router.back()} aria-label="Go back">
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -195,32 +188,17 @@ function SignInInner() {
             className="si-alert"
             role={banner.kind === 'error' ? 'alert' : 'status'}
             aria-live="polite"
-            // simple visual tweak for info state (optional)
-            style={
-              banner.kind === 'info'
-                ? { background: '#f5fbff', borderColor: 'rgba(59,130,246,0.25)', color: '#1e3a8a' }
-                : undefined
-            }
+            style={banner.kind === 'info' ? { background: '#f5fbff', borderColor: 'rgba(59,130,246,0.25)', color: '#1e3a8a' } : undefined}
           >
-            {banner.text}
+            {banner.text}{' '}
             {banner.showResend && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  onClick={resendVerification}
-                  // inline link styling to match your UI; no extra CSS file needed
-                  style={{
-                    border: 0,
-                    background: 'transparent',
-                    textDecoration: 'underline',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  Resend email
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={resendVerification}
+                style={{ border: 0, background: 'transparent', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+              >
+                Resend email
+              </button>
             )}
           </div>
         )}
@@ -310,12 +288,7 @@ function SignInInner() {
           </div>
 
           <div className="si-actions">
-            <button
-              type="submit"
-              className="si-btn-primary"
-              disabled={!formValid || submitting}
-              aria-busy={submitting}
-            >
+            <button type="submit" className="si-btn-primary" disabled={!formValid || submitting} aria-busy={submitting}>
               {submitting ? 'Signing in…' : 'Sign in'}
               {submitting && <span className="si-spinner" aria-hidden="true" />}
             </button>
