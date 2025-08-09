@@ -43,50 +43,59 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Helper: parse error info from query AND from hash (Supabase sometimes uses fragments)
-  function readAuthError() {
-    // from query string
-    const qErr = params.get('error');
-    const qCode = params.get('error_code');
-    const qDesc = params.get('error_description');
+  // Helper: read error + email from query and hash
+  function readFromUrl() {
+    const q = {
+      error: params.get('error'),
+      error_code: params.get('error_code'),
+      error_description: params.get('error_description'),
+      email: params.get('email'),
+    };
 
-    // from hash fragment (#error=…&error_code=…&error_description=…)
-    let hErr: string | null = null;
+    let hError: string | null = null;
     let hCode: string | null = null;
     let hDesc: string | null = null;
+    let hEmail: string | null = null;
+
     if (typeof window !== 'undefined' && window.location.hash) {
       const raw = window.location.hash.startsWith('#')
         ? window.location.hash.slice(1)
         : window.location.hash;
       const h = new URLSearchParams(raw);
-      hErr = h.get('error');
+      hError = h.get('error');
       hCode = h.get('error_code');
       hDesc = h.get('error_description');
+      hEmail = h.get('email');
     }
 
-    // prefer query values, fall back to hash
-    const error = qErr || hErr;
-    const error_code = qCode || hCode;
-    const error_description = qDesc || hDesc;
-
-    return { error, error_code, error_description };
+    return {
+      error: q.error || hError,
+      error_code: q.error_code || hCode,
+      error_description: q.error_description || hDesc,
+      email: q.email || hEmail,
+    };
   }
 
-  // Show link-expired/invalid message when applicable; then strip query+hash
+  // Show invalid/expired message; capture email; then strip query+hash
   useEffect(() => {
     if (handledParamsOnce.current) return;
-    const { error, error_code, error_description } = readAuthError();
+    const { error, error_code, error_description, email: emailFromUrl } = readFromUrl();
+
+    if (emailFromUrl && !email) {
+      try {
+        setEmail(decodeURIComponent(emailFromUrl));
+      } catch {
+        setEmail(emailFromUrl);
+      }
+    }
 
     if (error || error_code || error_description) {
       handledParamsOnce.current = true;
 
-      // Normalize common cases:
-      // - error_code=otp_expired → show specific message + resend option
-      // - any other error → show description or a generic message
       if (error_code === 'otp_expired') {
         setBanner({
           kind: 'error',
-          text: 'Your verification link has expired or is invalid. Please sign in to request a new one.',
+          text: 'Your verification link has expired or is invalid. We can resend it to the same email.',
           showResend: true,
         });
       } else {
@@ -101,9 +110,12 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, router]);
 
-  // Optional: resend verification email using the email typed in the form
+  // Resend verification email:
+  // - Prefer the email we parsed from the URL
+  // - Otherwise, use whatever is in the input
   const resendVerification = async () => {
-    if (!emailValid) {
+    const to = email.trim();
+    if (!emailRegex.test(to)) {
       setTouched((t) => ({ ...t, email: true }));
       setBanner({
         kind: 'error',
@@ -111,10 +123,11 @@ function SignInInner() {
       });
       return;
     }
+
     const { error } = await supabase.auth.resend({
       type: 'signup',
-      email: email.trim(),
-      options: { emailRedirectTo: `${location.origin}/auth/callback` },
+      email: to,
+      options: { emailRedirectTo: `${location.origin}/auth/callback?next=/dashboard&email=${encodeURIComponent(to)}` },
     });
     if (error) {
       setBanner({ kind: 'error', text: error.message });
@@ -185,11 +198,7 @@ function SignInInner() {
             // simple visual tweak for info state (optional)
             style={
               banner.kind === 'info'
-                ? {
-                    background: '#f5fbff',
-                    borderColor: 'rgba(59,130,246,0.25)',
-                    color: '#1e3a8a',
-                  }
+                ? { background: '#f5fbff', borderColor: 'rgba(59,130,246,0.25)', color: '#1e3a8a' }
                 : undefined
             }
           >

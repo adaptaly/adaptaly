@@ -82,13 +82,17 @@ export default function EmailSignupPage() {
         }
       }
 
+      // ⬇ Include the user's email in the callback so we can prefill on /signin if link is invalid
+      const redirect = `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(
+        email.trim()
+      )}`;
+
       // Send a confirmation link that returns to our callback page
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
         options: {
-          // ⬇⬇⬇ THIS is the important part
-          emailRedirectTo: `${baseUrl}/auth/callback`,
+          emailRedirectTo: redirect,
           data: { full_name: name.trim() },
         },
       });
@@ -104,7 +108,7 @@ export default function EmailSignupPage() {
       }
 
       setShowCheckEmail(true);
-    } catch (err: any) {
+    } catch {
       setErrorSummary('Something went wrong sending your confirmation email. Please try again.');
     } finally {
       setSubmitting(false);

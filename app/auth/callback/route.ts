@@ -5,10 +5,11 @@ import { supabaseServer } from '@/lib/supabaseServer';
 export async function GET(request: Request) {
   const url = new URL(request.url);
 
-  // Accept optional ?next=/somewhere, default to /dashboard
+  // Accept optional ?next and ?email; default next to /dashboard
   const nextParam = url.searchParams.get('next') || '/dashboard';
+  const emailParam = url.searchParams.get('email') || '';
 
-  // If Supabase already told us there's an error, go to /signin with details
+  // If Supabase already told us there's an error, go to /signin with details (and carry email through)
   const error = url.searchParams.get('error');
   if (error) {
     const signin = new URL('/signin', url.origin);
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
       const v = url.searchParams.get(key);
       if (v) signin.searchParams.set(key, v);
     }
+    if (emailParam) signin.searchParams.set('email', emailParam);
     return NextResponse.redirect(signin);
   }
 
@@ -26,12 +28,15 @@ export async function GET(request: Request) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
     if (exchangeError) {
       const signin = new URL('/signin', url.origin);
-      signin.searchParams.set('error', 'link_expired');
+      signin.searchParams.set('error', 'access_denied');
+      signin.searchParams.set('error_code', 'otp_expired');
+      signin.searchParams.set('error_description', 'Email link is invalid or has expired');
+      if (emailParam) signin.searchParams.set('email', emailParam);
       return NextResponse.redirect(signin);
     }
   }
 
-  // Double‑check we actually have a user after the exchange
+  // Double-check we actually have a user after the exchange
   const supabase = await supabaseServer();
   const {
     data: { user },
@@ -39,7 +44,10 @@ export async function GET(request: Request) {
 
   if (!user) {
     const signin = new URL('/signin', url.origin);
-    signin.searchParams.set('error', 'link_expired');
+    signin.searchParams.set('error', 'access_denied');
+    signin.searchParams.set('error_code', 'otp_expired');
+    signin.searchParams.set('error_description', 'Email link is invalid or has expired');
+    if (emailParam) signin.searchParams.set('email', emailParam);
     return NextResponse.redirect(signin);
   }
 
