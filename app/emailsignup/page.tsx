@@ -10,7 +10,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const hasNumber = (s: string) => /\d/.test(s);
 const hasSpecial = (s: string) => /[^A-Za-z0-9]/.test(s);
 
-// Base site URL used to build an absolute redirect for email verification
+// Hard lock to production host to avoid Supabase falling back to Site URL root
 const baseUrl =
   (typeof window === 'undefined'
     ? process.env.NEXT_PUBLIC_SITE_URL
@@ -40,15 +40,6 @@ export default function EmailSignupPage() {
   const pwValid = pwRules.len && pwRules.num && pwRules.sym;
   const formValid = nameValid && emailValid && pwValid;
 
-  const strength = useMemo(() => {
-    let s = 0;
-    if (pwRules.len) s++;
-    if (pwRules.num) s++;
-    if (pwRules.sym) s++;
-    if (pw.length >= 12) s++;
-    return Math.min(s, 4);
-  }, [pwRules, pw.length]);
-
   function providerUrlGuess() {
     const domain = email.split('@')[1]?.toLowerCase() || '';
     if (domain.includes('gmail') || domain.includes('googlemail')) {
@@ -76,13 +67,12 @@ export default function EmailSignupPage() {
     setErrorSummary(null);
     setSubmitting(true);
     try {
-      // 1) Server check: does this email already exist?
+      // Optional pre-check for existing email
       const res = await fetch('/api/auth/email-exists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-
       if (res.ok) {
         const { exists } = await res.json();
         if (exists) {
@@ -92,19 +82,17 @@ export default function EmailSignupPage() {
         }
       }
 
-      // 2) Proceed with Supabase email sign-up when not existing
+      // Send Supabase a verification link that returns to our callback
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
         options: {
-          // Absolute URL to our callback; success will land on /dashboard
           emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard`,
           data: { full_name: name.trim() },
         },
       });
 
       if (error) {
-        // Catch Supabase duplicate user cases
         if (/already\s*registered/i.test(error.message) || /user.*exists/i.test(error.message)) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
           setEmail('');
@@ -114,7 +102,6 @@ export default function EmailSignupPage() {
         return;
       }
 
-      // Success → show confirmation screen
       setShowCheckEmail(true);
     } finally {
       setSubmitting(false);
@@ -123,7 +110,6 @@ export default function EmailSignupPage() {
 
   if (showCheckEmail) {
     const guess = providerUrlGuess();
-
     return (
       <main className="es-background">
         <section className="es-card" aria-live="polite">
@@ -170,7 +156,7 @@ export default function EmailSignupPage() {
             </div>
 
             <p className="es-provider-note">
-              Didn’t get an email? Check your spam folder, or wait a minute and try again.
+              Did not get an email? Check your spam folder, or wait a minute and try again.
             </p>
           </div>
         </section>
@@ -310,9 +296,9 @@ export default function EmailSignupPage() {
             </ul>
 
             <div className="es-strength">
-              <div className={`bar s-${strength}`} />
+              <div className={`bar s-${(pwRules.len ? 1 : 0) + (pwRules.num ? 1 : 0) + (pwRules.sym ? 1 : 0) + (pw.length >= 12 ? 1 : 0)}`} />
               <span className="label">
-                {strength <= 1 ? 'Weak' : strength === 2 ? 'Okay' : strength === 3 ? 'Good' : 'Strong'}
+                {pw.length < 8 || !(pwRules.num && pwRules.sym) ? 'Weak' : pw.length < 12 ? 'Good' : 'Strong'}
               </span>
             </div>
           </div>

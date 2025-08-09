@@ -1,3 +1,4 @@
+// app/signup/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -17,10 +18,11 @@ export default function SignupChoice() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}/auth/callback?next=/dashboard`,
+        // use production host so Supabase does not drop to root
+        redirectTo: `https://www.adaptaly.com/auth/callback?next=/dashboard`,
       },
     });
-    // Supabase will redirect for OAuth — no further action needed
+    // OAuth will redirect away
   };
 
   const handleEmailClick = () => {

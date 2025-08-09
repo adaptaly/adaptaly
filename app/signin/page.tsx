@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
-// Make sure this page never tries to prerender statically
+// avoid static prerender errors with useSearchParams
 export const dynamic = 'force-dynamic';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
@@ -19,18 +19,17 @@ function SignInInner() {
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [remember, setRemember] = useState(true);
   const [capsLock, setCapsLock] = useState(false);
 
   const [touched, setTouched] = useState({ email: false, pw: false });
   const [submitting, setSubmitting] = useState(false);
-  const [errorSummary, setErrorSummary] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ kind: 'error' | 'info'; text: string } | null>(null);
 
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
+  // If already authenticated, skip to dashboard
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -39,18 +38,17 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Read callback messages safely inside Suspense
+  // Show friendly message if callback passed an error
   useEffect(() => {
     const err = params.get('error');
-    const errCode = params.get('error_code');
-    if (err) {
-      if (errCode === 'otp_expired') {
-        setErrorSummary('Your verification link has expired. Please sign in to request a new one.');
+    const code = params.get('error_code');
+    const desc = params.get('error_description');
+    if (err || code || desc) {
+      if (code === 'otp_expired') {
+        setBanner({ kind: 'error', text: 'Your verification link has expired. Please sign in to request a new one.' });
       } else {
-        setErrorSummary(decodeURIComponent(err));
+        setBanner({ kind: 'error', text: decodeURIComponent(desc || err || 'Link invalid. Please sign in again.') });
       }
-    } else if (params.get('verified') === '1') {
-      setInfo('Email verified. You can sign in now.');
     }
   }, [params]);
 
@@ -62,23 +60,21 @@ function SignInInner() {
       const problems: string[] = [];
       if (!emailValid) problems.push('Enter a valid email address.');
       if (!pwValid) problems.push('Enter your password.');
-      setErrorSummary(problems.join(' '));
+      setBanner({ kind: 'error', text: problems.join(' ') });
       return;
     }
 
-    setErrorSummary(null);
+    setBanner(null);
     try {
       setSubmitting(true);
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: pw,
       });
-
       if (error) {
-        setErrorSummary(error.message);
+        setBanner({ kind: 'error', text: error.message });
         return;
       }
-
       router.push('/dashboard');
     } finally {
       setSubmitting(false);
@@ -102,8 +98,11 @@ function SignInInner() {
           <p className="si-subtitle">Welcome back to Adaptaly.</p>
         </header>
 
-        {info && <div className="si-alert" role="status" aria-live="polite">{info}</div>}
-        {errorSummary && <div className="si-alert" role="alert" aria-live="polite">{errorSummary}</div>}
+        {banner && (
+          <div className="si-alert" role={banner.kind === 'error' ? 'alert' : 'status'} aria-live="polite">
+            {banner.text}
+          </div>
+        )}
 
         <form className="si-form" onSubmit={submit} noValidate>
           {/* Email */}
@@ -185,21 +184,8 @@ function SignInInner() {
             </div>
 
             {capsLock && <div className="si-caps" role="note">Caps Lock is on.</div>}
-
             <div className={`si-hint ${touched.pw && !pwValid ? 'is-error' : ''}`}>
               {touched.pw && !pwValid ? 'Enter your password.' : 'Passwords are case-sensitive.'}
-            </div>
-
-            <div className="si-row">
-              <label className="si-remember">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  aria-label="Remember this device"
-                />
-                <span>Remember me</span>
-              </label>
             </div>
           </div>
 
