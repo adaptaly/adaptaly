@@ -6,18 +6,23 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
+// Read URL at runtime
 export const dynamic = 'force-dynamic';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
-const baseUrl =
-  (
-    typeof window === 'undefined'
-      ? process.env.NEXT_PUBLIC_SITE_URL
-      : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
-  )?.replace(/\/$/, '') || 'https://www.adaptaly.com';
+type Banner = { kind: 'error' | 'info' | 'success'; text: string; showResend?: boolean };
 
-type Banner = { kind: 'error' | 'info'; text: string; showResend?: boolean };
+function guessProvider(email: string) {
+  const domain = email.split('@')[1]?.toLowerCase() || '';
+  if (domain.includes('gmail') || domain.includes('googlemail')) {
+    return { name: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
+  }
+  if (domain.includes('outlook') || domain.includes('hotmail') || domain.includes('live')) {
+    return { name: 'outlook', url: 'https://outlook.live.com/mail/0/inbox' };
+  }
+  return { name: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
+}
 
 function SignInInner() {
   const router = useRouter();
@@ -32,32 +37,42 @@ function SignInInner() {
   const [touched, setTouched] = useState({ email: false, pw: false });
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
+  const [provider, setProvider] = useState<{ name: 'gmail' | 'outlook' | 'gmail'; url: string } | null>(null);
 
+  // prevent loops; remember if we came here because of auth error
   const handledParamsOnce = useRef(false);
+  const suppressAutoRedirect = useRef(false);
 
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
+  // Only auto-redirect to /dashboard when we did NOT come from an auth error
   useEffect(() => {
     (async () => {
+      if (suppressAutoRedirect.current) return;
       const { data } = await supabase.auth.getUser();
       if (data.user) router.replace('/dashboard');
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Helper: read error + email + source from query and hash
   function readFromUrl() {
     const q = {
       error: params.get('error'),
       error_code: params.get('error_code'),
       error_description: params.get('error_description'),
       email: params.get('email'),
+      from: params.get('from'),
     };
+
     let hError: string | null = null;
     let hCode: string | null = null;
     let hDesc: string | null = null;
     let hEmail: string | null = null;
+    let hFrom: string | null = null;
+
     if (typeof window !== 'undefined' && window.location.hash) {
       const raw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
       const h = new URLSearchParams(raw);
@@ -65,25 +80,37 @@ function SignInInner() {
       hCode = h.get('error_code');
       hDesc = h.get('error_description');
       hEmail = h.get('email');
+      hFrom = h.get('from');
     }
+
     return {
       error: q.error || hError,
       error_code: q.error_code || hCode,
       error_description: q.error_description || hDesc,
       email: q.email || hEmail,
+      from: q.from || hFrom,
     };
   }
 
+  // Initialize banner/email from URL, and suppress auto redirect if coming from auth error
   useEffect(() => {
     if (handledParamsOnce.current) return;
-    const { error, error_code, error_description, email: emailFromUrl } = readFromUrl();
+    const { error, error_code, error_description, email: emailFromUrl, from } = readFromUrl();
+
+    if (from === 'auth_error') suppressAutoRedirect.current = true;
 
     if (emailFromUrl && !email) {
-      try { setEmail(decodeURIComponent(emailFromUrl)); } catch { setEmail(emailFromUrl); }
+      try {
+        setEmail(decodeURIComponent(emailFromUrl));
+      } catch {
+        setEmail(emailFromUrl);
+      }
+      setProvider(guessProvider(emailFromUrl));
     }
 
     if (error || error_code || error_description) {
       handledParamsOnce.current = true;
+
       if (error_code === 'otp_expired') {
         setBanner({
           kind: 'error',
@@ -94,35 +121,55 @@ function SignInInner() {
         const text = decodeURIComponent(error_description || error || 'Link invalid. Please sign in again.');
         setBanner({ kind: 'error', text, showResend: true });
       }
-      router.replace('/signin'); // strip query/hash
+
+      // strip query/hash so the banner doesn't persist on refresh
+      router.replace('/signin');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, router]);
 
+  // Resend verification to the captured email (no typing needed)
   const resendVerification = async () => {
-    const to = email.trim();
+    const to = (email || '').trim();
     if (!emailRegex.test(to)) {
       setTouched((t) => ({ ...t, email: true }));
-      setBanner({ kind: 'error', text: 'Enter a valid email above, then tap “Resend email” again.' });
+      setBanner({ kind: 'error', text: 'We couldn’t detect your email from the link. Enter it above, then tap “Resend email”.' });
       return;
     }
+
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: to,
       options: {
-        emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(to)}`,
+        emailRedirectTo: `${location.origin}/auth/callback?next=/dashboard&email=${encodeURIComponent(to)}`,
       },
     });
     if (error) {
       setBanner({ kind: 'error', text: error.message });
       return;
     }
-    setBanner({ kind: 'info', text: 'Verification email sent. Check your inbox.' });
+
+    // Success: show message and optionally open the right inbox
+    const guessed = guessProvider(to);
+    setProvider(guessed);
+    setBanner({
+      kind: 'success',
+      text: 'Verification email sent. Check your inbox.',
+    });
+
+    // Optional gentle auto-open of the provider in a new tab (may be blocked by pop-up blockers).
+    // Comment out if you don't want this behavior.
+    try {
+      window.open(guessed.url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // ignore
+    }
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched({ email: true, pw: true });
+
     if (!formValid) {
       const problems: string[] = [];
       if (!emailValid) problems.push('Enter a valid email address.');
@@ -130,6 +177,7 @@ function SignInInner() {
       setBanner({ kind: 'error', text: problems.join(' ') });
       return;
     }
+
     setBanner(null);
     try {
       setSubmitting(true);
@@ -151,7 +199,12 @@ function SignInInner() {
     <main className="si-background" role="main">
       <section className="si-card" aria-labelledby="si-title">
         <div className="si-topbar">
-          <button type="button" className="si-back" onClick={() => router.back()} aria-label="Go back">
+          <button
+            type="button"
+            className="si-back"
+            onClick={() => router.back()}
+            aria-label="Go back"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -169,7 +222,13 @@ function SignInInner() {
             className="si-alert"
             role={banner.kind === 'error' ? 'alert' : 'status'}
             aria-live="polite"
-            style={banner.kind === 'info' ? { background: '#f5fbff', borderColor: 'rgba(59,130,246,0.25)', color: '#1e3a8a' } : undefined}
+            style={
+              banner.kind === 'info'
+                ? { background: '#f5fbff', borderColor: 'rgba(59,130,246,0.25)', color: '#1e3a8a' }
+                : banner.kind === 'success'
+                ? { background: '#f0fff4', borderColor: 'rgba(34,197,94,0.25)', color: '#065f46' }
+                : undefined
+            }
           >
             {banner.text}{' '}
             {banner.showResend && (
@@ -181,10 +240,24 @@ function SignInInner() {
                 Resend email
               </button>
             )}
+            {!banner.showResend && provider && (
+              <>
+                {' '}
+                <a
+                  href={provider.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="si-forgot"
+                  style={{ padding: 0 }}
+                >
+                  Open {provider.name === 'gmail' ? 'Gmail' : 'Outlook'}
+                </a>
+              </>
+            )}
           </div>
         )}
 
-        <form className="si-form" onSubmit={submit} noValidate>
+        <form className="si-form" onSubmit={onSubmit} noValidate>
           {/* Email */}
           <div className="si-field">
             <label htmlFor="email" className="si-label">Email address</label>
@@ -202,7 +275,10 @@ function SignInInner() {
                 className="si-input has-icon"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setProvider(guessProvider(e.target.value));
+                }}
                 onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                 aria-invalid={touched.email && !emailValid}
               />
@@ -269,7 +345,12 @@ function SignInInner() {
           </div>
 
           <div className="si-actions">
-            <button type="submit" className="si-btn-primary" disabled={!formValid || submitting} aria-busy={submitting}>
+            <button
+              type="submit"
+              className="si-btn-primary"
+              disabled={!formValid || submitting}
+              aria-busy={submitting}
+            >
               {submitting ? 'Signing in…' : 'Sign in'}
               {submitting && <span className="si-spinner" aria-hidden="true" />}
             </button>
@@ -280,6 +361,15 @@ function SignInInner() {
             </div>
           </div>
         </form>
+
+        {/* Convenience row: quick inbox links when we know the provider */}
+        {provider && (
+          <div style={{ marginTop: 12, textAlign: 'center' }}>
+            <a href={provider.url} target="_blank" rel="noreferrer" className="si-forgot" style={{ padding: 0 }}>
+              Open {provider.name === 'gmail' ? 'Gmail' : 'Outlook'}
+            </a>
+          </div>
+        )}
       </section>
     </main>
   );

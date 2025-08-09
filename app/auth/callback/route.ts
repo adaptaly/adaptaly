@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const nextParam = url.searchParams.get('next') || '/dashboard';
   const emailParam = url.searchParams.get('email') || '';
 
-  // If Supabase sent an error (e.g., otp_expired), forward to /signin (carry email)
+  // If Supabase sent an error (e.g., otp_expired), forward to /signin (carry email + reason so /signin won't auto-redirect)
   const error = url.searchParams.get('error');
   if (error) {
     const signin = new URL('/signin', url.origin);
@@ -18,6 +18,7 @@ export async function GET(request: Request) {
       if (v) signin.searchParams.set(key, v);
     }
     if (emailParam) signin.searchParams.set('email', emailParam);
+    signin.searchParams.set('from', 'auth_error'); // <-- suppress auto-redirect on /signin
     return NextResponse.redirect(signin);
   }
 
@@ -32,13 +33,16 @@ export async function GET(request: Request) {
       signin.searchParams.set('error_code', 'otp_expired');
       signin.searchParams.set('error_description', 'Email link is invalid or has expired');
       if (emailParam) signin.searchParams.set('email', emailParam);
+      signin.searchParams.set('from', 'auth_error'); // <-- suppress auto-redirect on /signin
       return NextResponse.redirect(signin);
     }
   }
 
-  // Double-check we actually have a user
+  // Double-check we actually have a user after the exchange
   const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     const signin = new URL('/signin', url.origin);
@@ -46,9 +50,10 @@ export async function GET(request: Request) {
     signin.searchParams.set('error_code', 'otp_expired');
     signin.searchParams.set('error_description', 'Email link is invalid or has expired');
     if (emailParam) signin.searchParams.set('email', emailParam);
+    signin.searchParams.set('from', 'auth_error'); // <-- suppress auto-redirect on /signin
     return NextResponse.redirect(signin);
   }
 
-  // Success → go to next or /dashboard
+  // Success → into the app (to ?next=… or /dashboard)
   return NextResponse.redirect(new URL(nextParam, url.origin));
 }
