@@ -72,7 +72,7 @@ export default function SignInPageClient() {
           <h1 id="si-title" className="si-title">Sign in</h1>
         </header>
 
-        {/* Clean single error message, no resend button */}
+        {/* Single clean message. No resend button anywhere. */}
         {invalidLink && (
           <div className="si-alert" role="alert" aria-live="polite">
             This verification link has expired. Please sign in with your email and password.
@@ -125,17 +125,17 @@ export default function SignInPageClient() {
                 className="si-toggle"
                 onClick={() => setShowPw((s) => !s)}
                 aria-label={showPw ? 'Hide password' : 'Show password'}
+                title={showPw ? 'Hide password' : 'Show password'}
               >
-                {/* Inline SVG icons, no text */}
                 {showPw ? (
-                  // Eye-off icon
+                  // Eye-off
                   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                     <path d="M10.6 10.6a3 3 0 004.24 4.24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                     <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
                   </svg>
                 ) : (
-                  // Eye icon
+                  // Eye
                   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
                     <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
