@@ -17,7 +17,7 @@ const baseUrl =
     : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin)?.replace(/\/$/, '') ||
   'https://www.adaptaly.com';
 
-// Minimal helper to set an httpOnly cookie so /auth/callback can still recover the email
+// NEW: set an httpOnly cookie so /auth/callback and /signin can recover the email even if params get stripped
 async function setPendingEmailCookie(address: string) {
   try {
     await fetch('/api/pending-email', {
@@ -105,10 +105,10 @@ export default function EmailSignupPage() {
         const { exists } = await res.json();
         if (exists) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
-          setEmail(''); // clear the email field
-          return;       // stop here — do NOT signUp and do NOT show “check your email”
+          setEmail('');
+          return;
         }
-      } // if the check fails, we still try signUp and let Supabase error below
+      }
 
       // 2) Proceed with Supabase email sign-up when not existing
       const clean = email.trim();
@@ -124,7 +124,6 @@ export default function EmailSignupPage() {
       });
 
       if (error) {
-        // Catch Supabase “already registered” just in case
         if (/already\s*registered/i.test(error.message) || /user.*exists/i.test(error.message)) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
           setEmail('');
@@ -134,7 +133,7 @@ export default function EmailSignupPage() {
         return;
       }
 
-      // 3) Set a cookie fallback so /auth/callback can still recover the email
+      // 3) Cookie fallback so callback/signin can auto-recover the email
       await setPendingEmailCookie(clean);
 
       // Success → show confirmation screen

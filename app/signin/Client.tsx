@@ -1,4 +1,4 @@
-// app/signin/Client.tsx  (NEW)
+// app/signin/Client.tsx
 'use client';
 
 import './signin.css';
@@ -7,6 +7,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+
+function friendlyReason(raw?: string | null) {
+  const r = (raw || '').toLowerCase();
+  if (r.includes('access_denied')) return 'That link was already used or expired.';
+  if (r.includes('expired')) return 'That link expired.';
+  if (r.includes('invalid')) return 'That link was invalid.';
+  return 'That link was invalid or expired.';
+}
 
 export default function SignInPageClient() {
   const router = useRouter();
@@ -24,6 +32,8 @@ export default function SignInPageClient() {
   const [touched, setTouched] = useState({ email: !!emailFromUrl, pw: false });
   const [submitting, setSubmitting] = useState(false);
   const [errorSummary, setErrorSummary] = useState<string | null>(null);
+
+  // resend state
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
 
@@ -31,7 +41,23 @@ export default function SignInPageClient() {
   const pwValid = useMemo(() => pw.length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // If already authenticated go to dashboard
+  // Auto-prefill from cookie if URL didn't have it
+  useEffect(() => {
+    if (!emailFromUrl) {
+      fetch('/api/pending-email', { method: 'GET' })
+        .then((r) => r.json())
+        .then((j) => {
+          if (j?.email && emailRegex.test(j.email)) {
+            setEmail(j.email);
+            setTouched((t) => ({ ...t, email: true }));
+          }
+        })
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // If already authenticated → /dashboard
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -42,34 +68,51 @@ export default function SignInPageClient() {
 
   async function resendConfirm() {
     setResendMsg(null);
+
     const addr = (email || emailFromUrl).trim().toLowerCase();
     if (!emailRegex.test(addr)) {
-      setResendMsg('Enter your email first.');
+      setResendMsg('We couldn’t recover your email. Please type it above and try again.');
       return;
     }
+
     setResending(true);
     try {
-      const emailRedirectTo =
-        `${window.location.origin}/auth/callback?next=/dashboard&email=${encodeURIComponent(addr)}`;
+      const base =
+        (typeof window === 'undefined'
+          ? process.env.NEXT_PUBLIC_SITE_URL
+          : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin) || 'https://www.adaptaly.com';
 
-      // 1) Try resend for signup confirmation
+      const emailRedirectTo = `${base.replace(/\/$/, '')}/auth/callback?next=/dashboard&email=${encodeURIComponent(
+        addr
+      )}`;
+
+      // 1) Try resend of the signup confirmation
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: addr,
         options: { emailRedirectTo },
       });
+
       if (!error) {
-        setResendMsg('Sent. Check your inbox.');
+        setResendMsg(`We sent a fresh link to ${addr}. Check your inbox.`);
         return;
       }
 
-      // 2) Already confirmed fallback
+      // 2) If the account is already confirmed or blocked by policy → magic sign-in link
       const { error: otpErr } = await supabase.auth.signInWithOtp({
         email: addr,
         options: { emailRedirectTo },
       });
-      if (otpErr) setResendMsg(otpErr.message);
-      else setResendMsg('Sign-in link sent. Check your inbox.');
+
+      if (otpErr) {
+        // Show helpful hint if this is a redirect URL config issue
+        const hint = otpErr.message.toLowerCase().includes('redirect') || otpErr.message.toLowerCase().includes('url')
+          ? ' Make sure your production domain is added in Supabase Auth → URL Configuration → Additional Redirect URLs.'
+          : '';
+        setResendMsg(`Couldn’t send the email: ${otpErr.message}.${hint}`);
+      } else {
+        setResendMsg(`We sent a sign-in link to ${addr}. Check your inbox.`);
+      }
     } finally {
       setResending(false);
     }
@@ -111,20 +154,21 @@ export default function SignInPageClient() {
           <h1 id="si-title" className="si-title">Sign in</h1>
         </header>
 
-        {/* Invalid link banner */}
+        {/* Invalid link banner — friendly, email prefilled, one-click resend */}
         {invalidLink && (
           <div className="si-alert" role="alert" aria-live="polite">
-            That link was invalid or expired. {reason ? `(${reason})` : ''}
+            {friendlyReason(reason)} {!email && 'We tried to recover your email from the link and your device.'}
+            {email && <> I can send a new link to <strong>{email}</strong>.</>}
             <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
               <button className="si-btn-secondary" onClick={resendConfirm} disabled={resending}>
-                {resending ? 'Resending…' : `Resend email${emailFromUrl ? ` to ${emailFromUrl}` : ''}`}
+                {resending ? 'Sending…' : 'Resend link'}
               </button>
               {resendMsg && <span className="si-hint">{resendMsg}</span>}
             </div>
           </div>
         )}
 
-        {errorSummary && <div className="si-alert">{errorSummary}</div>}
+        {errorSummary && <div className="si-alert" role="alert">{errorSummary}</div>}
 
         <form className="si-form" onSubmit={submit} noValidate>
           {/* Email */}
