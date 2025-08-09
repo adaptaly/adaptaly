@@ -1,14 +1,17 @@
 // app/signin/page.tsx
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
+// Make sure this page never tries to prerender statically
+export const dynamic = 'force-dynamic';
+
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
-export default function SignInPage() {
+function SignInInner() {
   const router = useRouter();
   const params = useSearchParams();
   const supabase = supabaseBrowser();
@@ -28,7 +31,6 @@ export default function SignInPage() {
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // If already authenticated, push to /dashboard immediately
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -37,7 +39,7 @@ export default function SignInPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle messages from /auth/callback
+  // Read callback messages safely inside Suspense
   useEffect(() => {
     const err = params.get('error');
     const errCode = params.get('error_code');
@@ -77,8 +79,7 @@ export default function SignInPage() {
         return;
       }
 
-      const next = '/dashboard';
-      router.push(next);
+      router.push('/dashboard');
     } finally {
       setSubmitting(false);
     }
@@ -104,9 +105,8 @@ export default function SignInPage() {
         {info && <div className="si-alert" role="status" aria-live="polite">{info}</div>}
         {errorSummary && <div className="si-alert" role="alert" aria-live="polite">{errorSummary}</div>}
 
-        {/* ...the rest of your form stays the same... */}
-        {/* Email */}
         <form className="si-form" onSubmit={submit} noValidate>
+          {/* Email */}
           <div className="si-field">
             <label htmlFor="email" className="si-label">Email address</label>
             <div className={`si-input-wrap ${touched.email && !emailValid ? 'is-invalid' : ''} ${emailValid ? 'is-valid' : ''}`}>
@@ -217,5 +217,13 @@ export default function SignInPage() {
         </form>
       </section>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInInner />
+    </Suspense>
   );
 }
