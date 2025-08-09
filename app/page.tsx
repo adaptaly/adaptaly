@@ -1,9 +1,9 @@
 // app/page.tsx
 import { redirect } from 'next/navigation';
 
-type SearchParams = { [key: string]: string | string[] | undefined };
+type SPRecord = Record<string, string | string[] | undefined>;
 
-function hasAuthParams(sp: SearchParams) {
+function hasAuthParams(sp: SPRecord) {
   const keys = [
     'code',
     'error',
@@ -18,57 +18,54 @@ function hasAuthParams(sp: SearchParams) {
   return keys.some((k) => sp[k] !== undefined);
 }
 
-function toQueryString(sp: SearchParams) {
+function toQueryString(sp: SPRecord) {
   const qs = new URLSearchParams();
-  Object.keys(sp).forEach((k) => {
+  for (const k of Object.keys(sp)) {
     const v = sp[k];
     if (typeof v === 'string') qs.set(k, v);
     else if (Array.isArray(v)) v.forEach((x) => qs.append(k, x as string));
-  });
+  }
   const s = qs.toString();
   return s ? `?${s}` : '';
 }
 
-export default function HomePage({
+// NOTE: In Next 15, `searchParams` is a Promise on server components.
+export default async function HomePage({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SPRecord>;
 }) {
-  // If the email link landed on "/" with query params → redirect on the server
-  if (hasAuthParams(searchParams)) {
-    redirect(`/auth/callback${toQueryString(searchParams)}`);
+  const sp = await searchParams;
+
+  // If an auth email link dumped you on "/", bounce to /auth/callback on the server (no flicker).
+  if (hasAuthParams(sp)) {
+    redirect(`/auth/callback${toQueryString(sp)}`);
   }
 
-  // Handle rare case where an email client puts params in the hash (#...)
-  // This runs instantly on the client and doesn't render your homepage UI first.
+  // Rare: some clients put params in the hash (#...). Tiny client-side shim forwards them.
   const hashForwarder = `
     (function () {
       if (location.hash && location.hash.length > 1) {
         var raw = location.hash.slice(1);
         var h = new URLSearchParams(raw);
         var keys = ['code','error','error_code','error_description','access_token','refresh_token','email','from','next'];
-        var has = false;
-        for (var i=0;i<keys.length;i++){ if (h.has(keys[i])) { has = true; break; } }
-        if (has) {
-          var qs = h.toString();
-          location.replace('/auth/callback' + (qs ? '?' + qs : ''));
+        for (var i=0;i<keys.length;i++){
+          if (h.has(keys[i])) {
+            var qs = h.toString();
+            location.replace('/auth/callback' + (qs ? '?' + qs : ''));
+            return;
+          }
         }
       }
     })();
   `;
 
   return (
-    <html>
-      <head>
-        <title>Adaptaly</title>
-      </head>
-      <body>
-        <script dangerouslySetInnerHTML={{ __html: hashForwarder }} />
-        <main style={{ padding: 24 }}>
-          <h1>Adaptaly</h1>
-          <p>Welcome to Adaptaly.</p>
-        </main>
-      </body>
-    </html>
+    <main style={{ padding: 24 }}>
+      {/* inline, tiny; runs before any visible UI renders */}
+      <script dangerouslySetInnerHTML={{ __html: hashForwarder }} />
+      <h1>Adaptaly</h1>
+      <p>Welcome to Adaptaly.</p>
+    </main>
   );
 }
