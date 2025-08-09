@@ -6,29 +6,19 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const emailRaw = typeof body?.email === 'string' ? body.email : '';
-    const email = emailRaw.trim().toLowerCase();
-
-    if (!email || !email.includes('@')) {
-      // Be permissive. Never block signup because this endpoint failed.
+    const { email } = await req.json();
+    const target = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!target || !target.includes('@')) {
       return NextResponse.json({ exists: false }, { status: 200 });
     }
-
     const admin = await supabaseAdmin();
-    // Use PostgREST with the service key on the auth schema
     const { data, error } = await admin
       .schema('auth')
       .from('users')
       .select('id')
-      .eq('email', email)
+      .eq('email', target)
       .limit(1);
-
-    if (error) {
-      // Do not fail signup flow if admin read hiccups
-      return NextResponse.json({ exists: false }, { status: 200 });
-    }
-
+    if (error) return NextResponse.json({ exists: false }, { status: 200 });
     return NextResponse.json({ exists: Array.isArray(data) && data.length > 0 }, { status: 200 });
   } catch {
     return NextResponse.json({ exists: false }, { status: 200 });
