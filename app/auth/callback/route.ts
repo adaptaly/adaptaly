@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const nextParam = url.searchParams.get('next') || '/dashboard';
   const emailParam = url.searchParams.get('email') || '';
 
-  // If Supabase sent an error (e.g., otp_expired), forward it to /signin and carry email through
+  // If Supabase sent an error (e.g., otp_expired), forward to /signin (carry email)
   const error = url.searchParams.get('error');
   if (error) {
     const signin = new URL('/signin', url.origin);
@@ -36,11 +36,9 @@ export async function GET(request: Request) {
     }
   }
 
-  // Double-check we actually have a user after the exchange
+  // Double-check we actually have a user
   const supabase = await supabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     const signin = new URL('/signin', url.origin);
@@ -51,6 +49,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(signin);
   }
 
-  // Success → into the app (to ?next=… or /dashboard)
+  // Success → go to next or /dashboard
   return NextResponse.redirect(new URL(nextParam, url.origin));
 }
