@@ -10,7 +10,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const hasNumber = (s: string) => /\d/.test(s);
 const hasSpecial = (s: string) => /[^A-Za-z0-9]/.test(s);
 
-// Hard lock to production host to avoid Supabase falling back to Site URL root
+// Use your public site URL in prod (Vercel) and fall back to window.origin locally
 const baseUrl =
   (typeof window === 'undefined'
     ? process.env.NEXT_PUBLIC_SITE_URL
@@ -67,7 +67,7 @@ export default function EmailSignupPage() {
     setErrorSummary(null);
     setSubmitting(true);
     try {
-      // Optional pre-check for existing email
+      // Optional: check first if email exists (your API)
       const res = await fetch('/api/auth/email-exists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,12 +82,13 @@ export default function EmailSignupPage() {
         }
       }
 
-      // Send Supabase a verification link that returns to our callback
+      // Send a confirmation link that returns to our callback page
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
         options: {
-          emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard`,
+          // ⬇⬇⬇ THIS is the important part
+          emailRedirectTo: `${baseUrl}/auth/callback`,
           data: { full_name: name.trim() },
         },
       });
@@ -103,6 +104,8 @@ export default function EmailSignupPage() {
       }
 
       setShowCheckEmail(true);
+    } catch (err: any) {
+      setErrorSummary('Something went wrong sending your confirmation email. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -156,7 +159,7 @@ export default function EmailSignupPage() {
             </div>
 
             <p className="es-provider-note">
-              Did not get an email? Check your spam folder, or wait a minute and try again.
+              Didn’t get an email? Check your spam folder, or wait a minute and try again.
             </p>
           </div>
         </section>

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
-// avoid static prerender errors with useSearchParams
+// Avoid static prerender issues with useSearchParams in Next 15
 export const dynamic = 'force-dynamic';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
@@ -29,7 +29,7 @@ function SignInInner() {
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // If already authenticated, skip to dashboard
+  // If already authenticated, go straight to dashboard
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -38,17 +38,11 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Show friendly message if callback passed an error
+  // Show a clear error when the callback indicated an expired/invalid link
   useEffect(() => {
     const err = params.get('error');
-    const code = params.get('error_code');
-    const desc = params.get('error_description');
-    if (err || code || desc) {
-      if (code === 'otp_expired') {
-        setBanner({ kind: 'error', text: 'Your verification link has expired. Please sign in to request a new one.' });
-      } else {
-        setBanner({ kind: 'error', text: decodeURIComponent(desc || err || 'Link invalid. Please sign in again.') });
-      }
+    if (err === 'link_expired') {
+      setBanner({ kind: 'error', text: 'Your verification link has expired or is invalid. Please sign in to request a new one.' });
     }
   }, [params]);
 
@@ -72,7 +66,7 @@ function SignInInner() {
         password: pw,
       });
       if (error) {
-        setBanner({ kind: 'error', text: error.message });
+        setBanner({ kind: 'error', text: 'Email or password is incorrect.' });
         return;
       }
       router.push('/dashboard');
@@ -160,7 +154,6 @@ function SignInInner() {
                 onBlur={() => setTouched((t) => ({ ...t, pw: true }))}
                 onKeyUp={(e) => setCapsLock(e.getModifierState && e.getModifierState('CapsLock'))}
                 aria-invalid={touched.pw && !pwValid}
-                onKeyDown={(e) => { if (e.key === 'Enter') submit(e as unknown as React.FormEvent); }}
               />
               <button
                 type="button"
