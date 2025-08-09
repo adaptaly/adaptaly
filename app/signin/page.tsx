@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
-// Read URL at runtime
 export const dynamic = 'force-dynamic';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
@@ -22,7 +21,6 @@ function guessProvider(email: string): Provider {
   if (domain.includes('outlook') || domain.includes('hotmail') || domain.includes('live')) {
     return { name: 'outlook', url: 'https://outlook.live.com/mail/0/inbox' };
   }
-  // default to gmail
   return { name: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
 }
 
@@ -41,7 +39,7 @@ function SignInInner() {
   const [banner, setBanner] = useState<Banner | null>(null);
   const [provider, setProvider] = useState<Provider | null>(null);
 
-  // prevent loops; remember if we came here because of auth error
+  // prevents loop; also tells us if we came from /auth/callback with an auth error
   const handledParamsOnce = useRef(false);
   const suppressAutoRedirect = useRef(false);
 
@@ -49,17 +47,7 @@ function SignInInner() {
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // Only auto-redirect to /dashboard when we did NOT come from an auth error
-  useEffect(() => {
-    (async () => {
-      if (suppressAutoRedirect.current) return;
-      const { data } = await supabase.auth.getUser();
-      if (data.user) router.replace('/dashboard');
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Helper: read error + email + source from query and hash
+  // 1) Parse URL FIRST so we can suppress auto-redirect to /dashboard when coming from an auth error.
   function readFromUrl() {
     const q = {
       error: params.get('error'),
@@ -94,7 +82,6 @@ function SignInInner() {
     };
   }
 
-  // Initialize banner/email from URL, and suppress auto redirect if coming from auth error
   useEffect(() => {
     if (handledParamsOnce.current) return;
     const { error, error_code, error_description, email: emailFromUrl, from } = readFromUrl();
@@ -102,27 +89,21 @@ function SignInInner() {
     if (from === 'auth_error') suppressAutoRedirect.current = true;
 
     if (emailFromUrl && !email) {
-      try {
-        setEmail(decodeURIComponent(emailFromUrl));
-      } catch {
-        setEmail(emailFromUrl);
-      }
-      setProvider(guessProvider(emailFromUrl));
+      let decoded = emailFromUrl;
+      try { decoded = decodeURIComponent(emailFromUrl); } catch {}
+      setEmail(decoded);
+      setProvider(guessProvider(decoded));
     }
 
     if (error || error_code || error_description) {
       handledParamsOnce.current = true;
 
-      if (error_code === 'otp_expired') {
-        setBanner({
-          kind: 'error',
-          text: 'Your verification link has expired or is invalid. We can resend it to the same email.',
-          showResend: true,
-        });
-      } else {
-        const text = decodeURIComponent(error_description || error || 'Link invalid. Please sign in again.');
-        setBanner({ kind: 'error', text, showResend: true });
-      }
+      const isExpired = error_code === 'otp_expired';
+      const text = isExpired
+        ? 'Your verification link has expired or is invalid. We can resend it to the same email.'
+        : decodeURIComponent(error_description || error || 'Link invalid. Please sign in again.');
+
+      setBanner({ kind: 'error', text, showResend: true });
 
       // strip query/hash so the banner doesn't persist on refresh
       router.replace('/signin');
@@ -130,12 +111,27 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, router]);
 
-  // Resend verification to the captured email (no typing needed)
+  // 2) Only after the above runs, check if already signed in → /dashboard
+  useEffect(() => {
+    (async () => {
+      if (suppressAutoRedirect.current) return;
+      const { data } = await supabase.auth.getUser();
+      if (data.user) router.replace('/dashboard');
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Resend verification — uses captured email if available; otherwise asks user to type it and keeps the button visible.
   const resendVerification = async () => {
     const to = (email || '').trim();
+
     if (!emailRegex.test(to)) {
       setTouched((t) => ({ ...t, email: true }));
-      setBanner({ kind: 'error', text: 'We couldn’t detect your email from the link. Enter it above, then tap “Resend email”.' });
+      setBanner({
+        kind: 'error',
+        text: 'We couldn’t detect your email from the link. Enter it above, then tap “Resend email”.',
+        showResend: true, // keep the button right inside the error
+      });
       return;
     }
 
@@ -147,23 +143,17 @@ function SignInInner() {
       },
     });
     if (error) {
-      setBanner({ kind: 'error', text: error.message });
+      setBanner({ kind: 'error', text: error.message, showResend: true });
       return;
     }
 
-    // Success: show message and optionally open the right inbox
     const guessed = guessProvider(to);
     setProvider(guessed);
-    setBanner({
-      kind: 'success',
-      text: 'Verification email sent. Check your inbox.',
-    });
+    setBanner({ kind: 'success', text: 'Verification email sent. Check your inbox.' });
 
     try {
       window.open(guessed.url, '_blank', 'noopener,noreferrer');
-    } catch {
-      // ignore
-    }
+    } catch {}
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -174,7 +164,7 @@ function SignInInner() {
       const problems: string[] = [];
       if (!emailValid) problems.push('Enter a valid email address.');
       if (!pwValid) problems.push('Enter your password.');
-      setBanner({ kind: 'error', text: problems.join(' ') });
+      setBanner({ kind: 'error', text: problems.join(' '), showResend: true });
       return;
     }
 
@@ -186,7 +176,7 @@ function SignInInner() {
         password: pw,
       });
       if (error) {
-        setBanner({ kind: 'error', text: 'Email or password is incorrect.' });
+        setBanner({ kind: 'error', text: 'Email or password is incorrect.', showResend: true });
         return;
       }
       router.push('/dashboard');
@@ -199,12 +189,7 @@ function SignInInner() {
     <main className="si-background" role="main">
       <section className="si-card" aria-labelledby="si-title">
         <div className="si-topbar">
-          <button
-            type="button"
-            className="si-back"
-            onClick={() => router.back()}
-            aria-label="Go back"
-          >
+          <button type="button" className="si-back" onClick={() => router.back()} aria-label="Go back">
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -243,13 +228,7 @@ function SignInInner() {
             {!banner.showResend && provider && (
               <>
                 {' '}
-                <a
-                  href={provider.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="si-forgot"
-                  style={{ padding: 0 }}
-                >
+                <a href={provider.url} target="_blank" rel="noreferrer" className="si-forgot" style={{ padding: 0 }}>
                   Open {provider.name === 'gmail' ? 'Gmail' : 'Outlook'}
                 </a>
               </>
@@ -362,7 +341,6 @@ function SignInInner() {
           </div>
         </form>
 
-        {/* Convenience row: quick inbox links when we know the provider */}
         {provider && (
           <div style={{ marginTop: 12, textAlign: 'center' }}>
             <a href={provider.url} target="_blank" rel="noreferrer" className="si-forgot" style={{ padding: 0 }}>
