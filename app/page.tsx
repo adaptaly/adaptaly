@@ -1,15 +1,13 @@
 // app/page.tsx
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-/**
- * Root page guard:
- * - If Supabase (or the email client) lands on '/', forward
- *   any auth params to /auth/callback so the server handler can process them.
- */
-export default function HomePage() {
+// This page must be dynamic because we read URL params at runtime
+export const dynamic = 'force-dynamic';
+
+function RootForwarder() {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -30,27 +28,24 @@ export default function HomePage() {
     }
 
     // 2) If hash contains auth params, convert to query and forward
-    //    Example: /#error=access_denied&error_code=otp_expired&...
     if (typeof window !== 'undefined' && window.location.hash) {
       const raw = window.location.hash.startsWith('#')
         ? window.location.hash.slice(1)
         : window.location.hash;
 
       if (raw) {
-        const hashParams = new URLSearchParams(raw);
-
+        const h = new URLSearchParams(raw);
         const hasHashAuth =
-          hashParams.has('code') ||
-          hashParams.has('error') ||
-          hashParams.has('error_code') ||
-          hashParams.has('error_description') ||
-          hashParams.has('access_token') ||
-          hashParams.has('refresh_token');
+          h.has('code') ||
+          h.has('error') ||
+          h.has('error_code') ||
+          h.has('error_description') ||
+          h.has('access_token') ||
+          h.has('refresh_token');
 
         if (hasHashAuth) {
-          // Build a querystring from the hash and forward
-          const qs = hashParams.toString();
-          // Clear the hash and forward to callback
+          const qs = h.toString();
+          // Use a hard replace to also clear the hash in the URL bar
           window.location.replace(`/auth/callback${qs ? `?${qs}` : ''}`);
           return;
         }
@@ -58,12 +53,21 @@ export default function HomePage() {
     }
   }, [router, params]);
 
-  // If we reached here, there were no auth params – render your homepage.
+  // If we reached here, there were no auth params — render your homepage.
   return (
     <main style={{ padding: 24 }}>
-      {/* Replace with your real homepage content */}
+      {/* swap this with your real homepage UI */}
       <h1>Adaptaly</h1>
       <p>Welcome to Adaptaly.</p>
     </main>
+  );
+}
+
+export default function HomePage() {
+  // Wrap the component that calls useSearchParams with Suspense (Next 15 requirement)
+  return (
+    <Suspense fallback={null}>
+      <RootForwarder />
+    </Suspense>
   );
 }
