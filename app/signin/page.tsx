@@ -6,12 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
-// Always dynamic due to useSearchParams
 export const dynamic = 'force-dynamic';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
-// Canonical base URL
 const baseUrl =
   (
     typeof window === 'undefined'
@@ -41,7 +39,6 @@ function SignInInner() {
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // If already authenticated, go to /dashboard
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -50,7 +47,6 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Parse error + email from query and hash
   function readFromUrl() {
     const q = {
       error: params.get('error'),
@@ -58,12 +54,10 @@ function SignInInner() {
       error_description: params.get('error_description'),
       email: params.get('email'),
     };
-
     let hError: string | null = null;
     let hCode: string | null = null;
     let hDesc: string | null = null;
     let hEmail: string | null = null;
-
     if (typeof window !== 'undefined' && window.location.hash) {
       const raw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
       const h = new URLSearchParams(raw);
@@ -72,7 +66,6 @@ function SignInInner() {
       hDesc = h.get('error_description');
       hEmail = h.get('email');
     }
-
     return {
       error: q.error || hError,
       error_code: q.error_code || hCode,
@@ -81,22 +74,16 @@ function SignInInner() {
     };
   }
 
-  // Show message once, capture email, then strip query+hash
   useEffect(() => {
     if (handledParamsOnce.current) return;
     const { error, error_code, error_description, email: emailFromUrl } = readFromUrl();
 
     if (emailFromUrl && !email) {
-      try {
-        setEmail(decodeURIComponent(emailFromUrl));
-      } catch {
-        setEmail(emailFromUrl);
-      }
+      try { setEmail(decodeURIComponent(emailFromUrl)); } catch { setEmail(emailFromUrl); }
     }
 
     if (error || error_code || error_description) {
       handledParamsOnce.current = true;
-
       if (error_code === 'otp_expired') {
         setBanner({
           kind: 'error',
@@ -107,14 +94,11 @@ function SignInInner() {
         const text = decodeURIComponent(error_description || error || 'Link invalid. Please sign in again.');
         setBanner({ kind: 'error', text, showResend: true });
       }
-
-      // Clean URL (remove query + hash) so the banner doesn't stick
-      router.replace('/signin');
+      router.replace('/signin'); // strip query/hash
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, router]);
 
-  // Resend verification to known email (prefilled from URL) or typed value
   const resendVerification = async () => {
     const to = email.trim();
     if (!emailRegex.test(to)) {
@@ -122,7 +106,6 @@ function SignInInner() {
       setBanner({ kind: 'error', text: 'Enter a valid email above, then tap “Resend email” again.' });
       return;
     }
-
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: to,
@@ -140,7 +123,6 @@ function SignInInner() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched({ email: true, pw: true });
-
     if (!formValid) {
       const problems: string[] = [];
       if (!emailValid) problems.push('Enter a valid email address.');
@@ -148,7 +130,6 @@ function SignInInner() {
       setBanner({ kind: 'error', text: problems.join(' ') });
       return;
     }
-
     setBanner(null);
     try {
       setSubmitting(true);
