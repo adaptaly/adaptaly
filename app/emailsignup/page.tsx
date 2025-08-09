@@ -10,6 +10,12 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const hasNumber = (s: string) => /\d/.test(s);
 const hasSpecial = (s: string) => /[^A-Za-z0-9]/.test(s);
 
+// Base site URL used to build an absolute redirect for email verification
+const baseUrl =
+  (typeof window === 'undefined'
+    ? process.env.NEXT_PUBLIC_SITE_URL
+    : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin) || 'https://adaptaly.com';
+
 export default function EmailSignupPage() {
   const router = useRouter();
   const supabase = supabaseBrowser();
@@ -74,7 +80,7 @@ export default function EmailSignupPage() {
     setErrorSummary(null);
     setSubmitting(true);
     try {
-      // 1) **Server check**: is this email already used?
+      // 1) Server check: does this email already exist?
       const res = await fetch('/api/auth/email-exists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,26 +91,24 @@ export default function EmailSignupPage() {
         const { exists } = await res.json();
         if (exists) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
-          setEmail('');            // clear the email field
-          return;                  // stop here – do NOT signUp and do NOT show “check your email”
+          setEmail(''); // clear the email field
+          return;       // stop here — do NOT signUp and do NOT show “check your email”
         }
-      } else {
-        // If the check fails for some reason, fall back to the client error we’ll catch below
-        // (we still try the signUp; you can choose to block instead if you prefer)
-      }
+      } // if the check fails, we still try signUp and let Supabase error below
 
-      // 2) Proceed to sign up (only if not existing)
+      // 2) Proceed with Supabase email sign-up when not existing
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
         options: {
-          emailRedirectTo: `${location.origin}/auth/callback?next=/dashboard`,
+          // absolute redirect; default to /dashboard there if `next` is missing
+          emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard`,
           data: { full_name: name.trim() },
         },
       });
 
       if (error) {
-        // Catch any “already registered” returned by Supabase as well (double safety)
+        // Catch Supabase “already registered” just in case
         if (/already\s*registered/i.test(error.message) || /user.*exists/i.test(error.message)) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
           setEmail('');
@@ -114,7 +118,7 @@ export default function EmailSignupPage() {
         return;
       }
 
-      // Success → show confirmation notice
+      // Success → show confirmation screen
       setShowCheckEmail(true);
     } finally {
       setSubmitting(false);
@@ -152,7 +156,7 @@ export default function EmailSignupPage() {
             <p className="es-provider-hint">Open your inbox:</p>
             <div className="es-provider-buttons">
               <a
-                className={`es-btn-secondary ${providerUrlGuess().primary === 'gmail' ? 'is-suggested' : ''}`}
+                className={`es-btn-secondary ${guess.primary === 'gmail' ? 'is-suggested' : ''}`}
                 href="https://mail.google.com/mail/u/0/#inbox"
                 target="_blank"
                 rel="noreferrer"
@@ -160,7 +164,7 @@ export default function EmailSignupPage() {
                 Open Gmail
               </a>
               <a
-                className={`es-btn-secondary ${providerUrlGuess().primary === 'outlook' ? 'is-suggested' : ''}`}
+                className={`es-btn-secondary ${guess.primary === 'outlook' ? 'is-suggested' : ''}`}
                 href="https://outlook.live.com/mail/0/inbox"
                 target="_blank"
                 rel="noreferrer"
