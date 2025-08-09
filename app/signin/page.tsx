@@ -1,14 +1,18 @@
 // app/signin/page.tsx
-'use client';
+import { Suspense } from 'react';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { supabaseBrowser } from '@/lib/supabaseClient';
-import './signin.css';
+export const dynamic = 'force-dynamic'; // avoid static prerendering for this page
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+function SignInPageClient() {
+  'use client';
 
-export default function SignInPage() {
+  import './signin.css';
+  import { useEffect, useMemo, useState } from 'react';
+  import { useRouter, useSearchParams } from 'next/navigation';
+  import { supabaseBrowser } from '@/lib/supabaseClient';
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+
   const router = useRouter();
   const search = useSearchParams();
   const supabase = supabaseBrowser();
@@ -31,27 +35,7 @@ export default function SignInPage() {
   const pwValid = useMemo(() => pw.length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // If we couldn't get email from the link, ask the server cookie
-  useEffect(() => {
-    if (!emailFromUrl) {
-      fetch('/api/pending-email', { method: 'GET' })
-        .then(async (r) => {
-          // Cookie is httpOnly, the route just ensures same-origin and returns JSON to trip the Set-Cookie, value not needed
-          // We still need to read it from the response? We don't get cookie value directly.
-          // So we do a follow-up to same route which will reflect if cookie exists by having the server echo nothing.
-          // We can't read httpOnly cookie in JS, so we let the user type if absent.
-          // To improve UX, we can attempt a no-op; but ultimately email must be typed or come via query.
-          return r; // no-op
-        })
-        .finally(() => {
-          // nothing — cookie can't be read client-side; leave as is
-        })
-        .catch(() => {});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // If already authenticated, go dashboard
+  // If already authenticated → /dashboard
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -67,13 +51,13 @@ export default function SignInPage() {
       setResendMsg('Enter your email first.');
       return;
     }
-
     setResending(true);
     try {
       const emailRedirectTo = `${window.location.origin}/auth/callback?next=/dashboard&email=${encodeURIComponent(
         addr,
       )}`;
-      // 1) Try signup resend
+
+      // 1) Try resend for signup confirmation
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: addr,
@@ -83,7 +67,8 @@ export default function SignInPage() {
         setResendMsg('Sent. Check your inbox.');
         return;
       }
-      // 2) Fall back to magic sign-in if already confirmed
+
+      // 2) If already confirmed, fall back to magic sign-in
       const { error: otpErr } = await supabase.auth.signInWithOtp({
         email: addr,
         options: { emailRedirectTo },
@@ -209,5 +194,13 @@ export default function SignInPage() {
         </form>
       </section>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInPageClient />
+    </Suspense>
   );
 }
