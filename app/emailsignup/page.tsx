@@ -10,13 +10,12 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const hasNumber = (s: string) => /\d/.test(s);
 const hasSpecial = (s: string) => /[^A-Za-z0-9]/.test(s);
 
-// Canonical base URL: always prefer NEXT_PUBLIC_SITE_URL, fallback to window.origin
+// Base site URL used to build an absolute redirect for email verification
 const baseUrl =
-  (
-    typeof window === 'undefined'
-      ? process.env.NEXT_PUBLIC_SITE_URL
-      : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
-  )?.replace(/\/$/, '') || 'https://www.adaptaly.com';
+  (typeof window === 'undefined'
+    ? process.env.NEXT_PUBLIC_SITE_URL
+    : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin)?.replace(/\/$/, '') ||
+  'https://www.adaptaly.com';
 
 export default function EmailSignupPage() {
   const router = useRouter();
@@ -36,11 +35,24 @@ export default function EmailSignupPage() {
   const nameValid = useMemo(() => name.trim().length >= 2, [name]);
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwRules = useMemo(
-    () => ({ len: pw.length >= 8, num: hasNumber(pw), sym: hasSpecial(pw) }),
+    () => ({
+      len: pw.length >= 8,
+      num: hasNumber(pw),
+      sym: hasSpecial(pw),
+    }),
     [pw]
   );
   const pwValid = pwRules.len && pwRules.num && pwRules.sym;
   const formValid = nameValid && emailValid && pwValid;
+
+  const strength = useMemo(() => {
+    let s = 0;
+    if (pwRules.len) s++;
+    if (pwRules.num) s++;
+    if (pwRules.sym) s++;
+    if (pw.length >= 12) s++;
+    return Math.min(s, 4);
+  }, [pwRules, pw.length]);
 
   function providerUrlGuess() {
     const domain = email.split('@')[1]?.toLowerCase() || '';
@@ -69,36 +81,36 @@ export default function EmailSignupPage() {
     setErrorSummary(null);
     setSubmitting(true);
     try {
-      // Optional: check email exists
+      // 1) Server check: does this email already exist?
       const res = await fetch('/api/auth/email-exists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
+
       if (res.ok) {
         const { exists } = await res.json();
         if (exists) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
-          setEmail('');
-          return;
+          setEmail(''); // clear the email field
+          return;       // stop here — do NOT signUp and do NOT show “check your email”
         }
-      }
+      } // if the check fails, we still try signUp and let Supabase error below
 
-      // Include email + next so we can prefill /signin on invalid links
-      const redirect = `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(
-        email.trim()
-      )}`;
-
+      // 2) Proceed with Supabase email sign-up when not existing
+      const clean = email.trim();
       const { error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: clean,
         password: pw,
         options: {
-          emailRedirectTo: redirect,
+          // include email so callback + signin can pick it up for resend
+          emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(clean)}`,
           data: { full_name: name.trim() },
         },
       });
 
       if (error) {
+        // Catch Supabase “already registered” just in case
         if (/already\s*registered/i.test(error.message) || /user.*exists/i.test(error.message)) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
           setEmail('');
@@ -108,9 +120,8 @@ export default function EmailSignupPage() {
         return;
       }
 
+      // Success → show confirmation screen
       setShowCheckEmail(true);
-    } catch {
-      setErrorSummary('Something went wrong sending your confirmation email. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -118,6 +129,7 @@ export default function EmailSignupPage() {
 
   if (showCheckEmail) {
     const guess = providerUrlGuess();
+
     return (
       <main className="es-background">
         <section className="es-card" aria-live="polite">
@@ -145,14 +157,27 @@ export default function EmailSignupPage() {
           <div className="es-provider-actions">
             <p className="es-provider-hint">Open your inbox:</p>
             <div className="es-provider-buttons">
-              <a className={`es-btn-secondary ${guess.primary === 'gmail' ? 'is-suggested' : ''}`} href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noreferrer">
+              <a
+                className={`es-btn-secondary ${guess.primary === 'gmail' ? 'is-suggested' : ''}`}
+                href="https://mail.google.com/mail/u/0/#inbox"
+                target="_blank"
+                rel="noreferrer"
+              >
                 Open Gmail
               </a>
-              <a className={`es-btn-secondary ${guess.primary === 'outlook' ? 'is-suggested' : ''}`} href="https://outlook.live.com/mail/0/inbox" target="_blank" rel="noreferrer">
+              <a
+                className={`es-btn-secondary ${guess.primary === 'outlook' ? 'is-suggested' : ''}`}
+                href="https://outlook.live.com/mail/0/inbox"
+                target="_blank"
+                rel="noreferrer"
+              >
                 Open Outlook
               </a>
             </div>
-            <p className="es-provider-note">Didn’t get an email? Check your spam folder, or wait a minute and try again.</p>
+
+            <p className="es-provider-note">
+              Didn’t get an email? Check your spam folder, or wait a minute and try again.
+            </p>
           </div>
         </section>
       </main>
@@ -291,9 +316,9 @@ export default function EmailSignupPage() {
             </ul>
 
             <div className="es-strength">
-              <div className={`bar s-${(pwRules.len ? 1 : 0) + (pwRules.num ? 1 : 0) + (pwRules.sym ? 1 : 0) + (pw.length >= 12 ? 1 : 0)}`} />
+              <div className={`bar s-${strength}`} />
               <span className="label">
-                {pw.length < 8 || !(pwRules.num && pwRules.sym) ? 'Weak' : pw.length < 12 ? 'Good' : 'Strong'}
+                {strength <= 1 ? 'Weak' : strength === 2 ? 'Okay' : strength === 3 ? 'Good' : 'Strong'}
               </span>
             </div>
           </div>
@@ -303,7 +328,12 @@ export default function EmailSignupPage() {
           </p>
 
           <div className="es-actions">
-            <button type="submit" className="es-btn-primary" disabled={!formValid || submitting} aria-busy={submitting}>
+            <button
+              type="submit"
+              className="es-btn-primary"
+              disabled={!formValid || submitting}
+              aria-busy={submitting}
+            >
               {submitting ? 'Creating…' : 'Create Account'}
               {submitting && <span className="es-spinner" aria-hidden="true" />}
             </button>

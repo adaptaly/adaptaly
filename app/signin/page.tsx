@@ -24,6 +24,13 @@ function guessProvider(email: string): Provider {
   return { name: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
 }
 
+const baseUrl =
+  (
+    typeof window === 'undefined'
+      ? process.env.NEXT_PUBLIC_SITE_URL
+      : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+  )?.replace(/\/$/, '') || 'https://www.adaptaly.com';
+
 function SignInInner() {
   const router = useRouter();
   const params = useSearchParams();
@@ -39,7 +46,7 @@ function SignInInner() {
   const [banner, setBanner] = useState<Banner | null>(null);
   const [provider, setProvider] = useState<Provider | null>(null);
 
-  // prevents loop; also tells us if we came from /auth/callback with an auth error
+  // flags
   const handledParamsOnce = useRef(false);
   const suppressAutoRedirect = useRef(false);
 
@@ -47,7 +54,7 @@ function SignInInner() {
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // 1) Parse URL FIRST so we can suppress auto-redirect to /dashboard when coming from an auth error.
+  // Read error + email + source from query and hash
   function readFromUrl() {
     const q = {
       error: params.get('error'),
@@ -82,6 +89,7 @@ function SignInInner() {
     };
   }
 
+  // 1) Parse URL FIRST, so we can suppress auto-redirect when coming from an auth error.
   useEffect(() => {
     if (handledParamsOnce.current) return;
     const { error, error_code, error_description, email: emailFromUrl, from } = readFromUrl();
@@ -121,7 +129,7 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Resend verification — uses captured email if available; otherwise asks user to type it and keeps the button visible.
+  // Resend verification — try signup verification; if user already confirmed, fallback to magic sign-in link.
   const resendVerification = async () => {
     const to = (email || '').trim();
 
@@ -130,30 +138,46 @@ function SignInInner() {
       setBanner({
         kind: 'error',
         text: 'We couldn’t detect your email from the link. Enter it above, then tap “Resend email”.',
-        showResend: true, // keep the button right inside the error
+        showResend: true, // keep the button, so they can type + try again
       });
       return;
     }
 
-    const { error } = await supabase.auth.resend({
+    // First: resend the signup verification (works if the account is unconfirmed)
+    const resend = await supabase.auth.resend({
       type: 'signup',
       email: to,
       options: {
-        emailRedirectTo: `${location.origin}/auth/callback?next=/dashboard&email=${encodeURIComponent(to)}`,
+        emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(to)}`,
       },
     });
-    if (error) {
-      setBanner({ kind: 'error', text: error.message, showResend: true });
+
+    if (!resend.error) {
+      // success
+      const guessed = guessProvider(to);
+      setProvider(guessed);
+      setBanner({ kind: 'success', text: 'Verification email sent. Check your inbox.' });
+      try { window.open(guessed.url, '_blank', 'noopener,noreferrer'); } catch {}
+      return;
+    }
+
+    // If we get here, the user is probably already confirmed. Send a sign-in magic link instead.
+    const magic = await supabase.auth.signInWithOtp({
+      email: to,
+      options: {
+        emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(to)}`,
+      },
+    });
+
+    if (magic.error) {
+      setBanner({ kind: 'error', text: magic.error.message, showResend: true });
       return;
     }
 
     const guessed = guessProvider(to);
     setProvider(guessed);
-    setBanner({ kind: 'success', text: 'Verification email sent. Check your inbox.' });
-
-    try {
-      window.open(guessed.url, '_blank', 'noopener,noreferrer');
-    } catch {}
+    setBanner({ kind: 'success', text: 'Sign-in link sent. Check your inbox.' });
+    try { window.open(guessed.url, '_blank', 'noopener,noreferrer'); } catch {}
   };
 
   const onSubmit = async (e: React.FormEvent) => {
