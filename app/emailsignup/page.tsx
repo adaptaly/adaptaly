@@ -14,7 +14,7 @@ const hasSpecial = (s: string) => /[^A-Za-z0-9]/.test(s);
 const baseUrl =
   (typeof window === 'undefined'
     ? process.env.NEXT_PUBLIC_SITE_URL
-    : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin) || 'https://adaptaly.com';
+    : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin) || 'https://www.adaptaly.com';
 
 export default function EmailSignupPage() {
   const router = useRouter();
@@ -34,11 +34,7 @@ export default function EmailSignupPage() {
   const nameValid = useMemo(() => name.trim().length >= 2, [name]);
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwRules = useMemo(
-    () => ({
-      len: pw.length >= 8,
-      num: hasNumber(pw),
-      sym: hasSpecial(pw),
-    }),
+    () => ({ len: pw.length >= 8, num: hasNumber(pw), sym: hasSpecial(pw) }),
     [pw]
   );
   const pwValid = pwRules.len && pwRules.num && pwRules.sym;
@@ -91,24 +87,24 @@ export default function EmailSignupPage() {
         const { exists } = await res.json();
         if (exists) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
-          setEmail(''); // clear the email field
-          return;       // stop here — do NOT signUp and do NOT show “check your email”
+          setEmail('');
+          return;
         }
-      } // if the check fails, we still try signUp and let Supabase error below
+      }
 
       // 2) Proceed with Supabase email sign-up when not existing
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password: pw,
         options: {
-          // absolute redirect; default to /dashboard there if `next` is missing
+          // Absolute URL to our callback; success will land on /dashboard
           emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard`,
           data: { full_name: name.trim() },
         },
       });
 
       if (error) {
-        // Catch Supabase “already registered” just in case
+        // Catch Supabase duplicate user cases
         if (/already\s*registered/i.test(error.message) || /user.*exists/i.test(error.message)) {
           setErrorSummary('An account with this email already exists. Try signing in instead.');
           setEmail('');

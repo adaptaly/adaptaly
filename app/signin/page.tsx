@@ -1,7 +1,8 @@
+// app/signin/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
@@ -9,6 +10,7 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
 export default function SignInPage() {
   const router = useRouter();
+  const params = useSearchParams();
   const supabase = supabaseBrowser();
 
   const [email, setEmail] = useState('');
@@ -20,6 +22,7 @@ export default function SignInPage() {
   const [touched, setTouched] = useState({ email: false, pw: false });
   const [submitting, setSubmitting] = useState(false);
   const [errorSummary, setErrorSummary] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
@@ -33,6 +36,21 @@ export default function SignInPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Handle messages from /auth/callback
+  useEffect(() => {
+    const err = params.get('error');
+    const errCode = params.get('error_code');
+    if (err) {
+      if (errCode === 'otp_expired') {
+        setErrorSummary('Your verification link has expired. Please sign in to request a new one.');
+      } else {
+        setErrorSummary(decodeURIComponent(err));
+      }
+    } else if (params.get('verified') === '1') {
+      setInfo('Email verified. You can sign in now.');
+    }
+  }, [params]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,8 +77,7 @@ export default function SignInPage() {
         return;
       }
 
-      const params = new URLSearchParams(window.location.search);
-      const next = params.get('redirectedFrom') || '/dashboard';
+      const next = '/dashboard';
       router.push(next);
     } finally {
       setSubmitting(false);
@@ -71,12 +88,7 @@ export default function SignInPage() {
     <main className="si-background" role="main">
       <section className="si-card" aria-labelledby="si-title">
         <div className="si-topbar">
-          <button
-            type="button"
-            className="si-back"
-            onClick={() => router.back()}
-            aria-label="Go back"
-          >
+          <button type="button" className="si-back" onClick={() => router.back()} aria-label="Go back">
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -89,14 +101,12 @@ export default function SignInPage() {
           <p className="si-subtitle">Welcome back to Adaptaly.</p>
         </header>
 
-        {errorSummary && (
-          <div className="si-alert" role="alert" aria-live="polite">
-            {errorSummary}
-          </div>
-        )}
+        {info && <div className="si-alert" role="status" aria-live="polite">{info}</div>}
+        {errorSummary && <div className="si-alert" role="alert" aria-live="polite">{errorSummary}</div>}
 
+        {/* ...the rest of your form stays the same... */}
+        {/* Email */}
         <form className="si-form" onSubmit={submit} noValidate>
-          {/* Email */}
           <div className="si-field">
             <label htmlFor="email" className="si-label">Email address</label>
             <div className={`si-input-wrap ${touched.email && !emailValid ? 'is-invalid' : ''} ${emailValid ? 'is-valid' : ''}`}>
@@ -194,12 +204,7 @@ export default function SignInPage() {
           </div>
 
           <div className="si-actions">
-            <button
-              type="submit"
-              className="si-btn-primary"
-              disabled={!formValid || submitting}
-              aria-busy={submitting}
-            >
+            <button type="submit" className="si-btn-primary" disabled={!formValid || submitting} aria-busy={submitting}>
               {submitting ? 'Signing in…' : 'Sign in'}
               {submitting && <span className="si-spinner" aria-hidden="true" />}
             </button>
