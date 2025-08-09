@@ -1,108 +1,70 @@
-// app/auth/callback/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-function expiredRedirect(origin: string) {
-  const target = new URL('/signin', origin);
-  target.searchParams.set('invalidLink', '1');
-  target.searchParams.set('reason', 'expired');
-  return target;
+function safeNext(raw: string | null): string {
+  // Only allow same-origin relative paths
+  if (!raw) return '/dashboard';
+  if (!raw.startsWith('/')) return '/dashboard';
+  if (raw.startsWith('//')) return '/dashboard';
+  return raw;
 }
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-
-  // Supabase can return either:
-  // 1) ?code=...                                           (PKCE / magic link)
-  // 2) ?token_hash=...&type=signup|magiclink|recovery|...  (email confirmation)
   const code = url.searchParams.get('code');
-  const token_hash = url.searchParams.get('token_hash');
-  const type = url.searchParams.get('type');
-  const providerErr =
-    url.searchParams.get('error') || url.searchParams.get('error_description');
+  const type = url.searchParams.get('type'); // 'recovery' for password reset, etc.
+  const nextParam = url.searchParams.get('next');
 
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // Prepare a response to collect cookies, which we’ll copy onto our redirect.
-  const cookieCarrier = new NextResponse();
-
-  try {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      console.error('[auth/callback] Missing env vars: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY');
-      return NextResponse.redirect(expiredRedirect(url.origin), {
-        headers: cookieCarrier.headers,
-      });
-    }
-
-    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookieCarrier.cookies.set(name, value, options);
-          });
-        },
-      },
-    });
-
-    // Any explicit provider error → expired banner (no crash)
-    if (providerErr) {
-      console.warn('[auth/callback] Provider error:', providerErr);
-      return NextResponse.redirect(expiredRedirect(url.origin), {
-        headers: cookieCarrier.headers,
-      });
-    }
-
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        console.warn('[auth/callback] exchangeCodeForSession error:', error.message);
-        return NextResponse.redirect(expiredRedirect(url.origin), {
-          headers: cookieCarrier.headers,
-        });
-      }
-    } else if (token_hash && type) {
-      const allowed = new Set(['signup', 'magiclink', 'recovery', 'invite', 'email_change']);
-      const t = (type || '').toLowerCase();
-      if (!allowed.has(t)) {
-        console.warn('[auth/callback] Unexpected verify type:', t);
-        return NextResponse.redirect(expiredRedirect(url.origin), {
-          headers: cookieCarrier.headers,
-        });
-      }
-      const { error } = await supabase.auth.verifyOtp({
-        token_hash,
-        type: t as 'signup' | 'magiclink' | 'recovery' | 'invite' | 'email_change',
-      });
-      if (error) {
-        console.warn('[auth/callback] verifyOtp error:', error.message);
-        return NextResponse.redirect(expiredRedirect(url.origin), {
-          headers: cookieCarrier.headers,
-        });
-      }
-    } else {
-      console.warn('[auth/callback] No usable params found');
-      return NextResponse.redirect(expiredRedirect(url.origin), {
-        headers: cookieCarrier.headers,
-      });
-    }
-
-    // Success → go to requested page or /dashboard
-    const nextParam = url.searchParams.get('next');
-    const nextPath = nextParam && nextParam.startsWith('/') ? nextParam : '/dashboard';
-    return NextResponse.redirect(new URL(nextPath, url.origin), {
-      headers: cookieCarrier.headers, // carry auth cookies forward
-    });
-  } catch (err: any) {
-    console.error('[auth/callback] Uncaught error:', err?.message || err);
-    return NextResponse.redirect(expiredRedirect(url.origin), {
-      headers: cookieCarrier.headers,
-    });
+  // If no 'next' provided but it's a recovery link, default to the confirm page.
+  let onSuccess = safeNext(nextParam);
+  if (!nextParam && type === 'recovery') {
+    onSuccess = '/reset/confirm';
   }
+
+  // Where to send users if exchange fails
+  const onError = type === 'recovery' ? '/reset?invalidLink=1' : '/signin?error=callback';
+
+  // Missing code -> bounce to sign in
+  if (!code) {
+    return NextResponse.redirect(new URL('/signin', url.origin));
+  }
+
+  // Read both env variants to be safe
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Hard fail early if env is misconfigured
+    return NextResponse.redirect(new URL('/signin?error=env', url.origin));
+  }
+
+  // We collect cookies on a non-redirect response, then copy them to the final redirect.
+  const cookieCollector = NextResponse.next();
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get: (name: string) => request.cookies.get(name)?.value,
+      set: (name: string, value: string, options: CookieOptions) => {
+        cookieCollector.cookies.set({ name, value, ...options });
+      },
+      remove: (name: string, options: CookieOptions) => {
+        cookieCollector.cookies.set({ name, value: '', ...options, maxAge: 0 });
+      },
+    },
+  });
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  const target = error ? onError : onSuccess;
+  const redirect = NextResponse.redirect(new URL(target, url.origin));
+
+  // Copy any Set-Cookie headers from the Supabase exchange onto the redirect response
+  cookieCollector.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+
+  // Avoid caching this redirect
+  redirect.headers.set('Cache-Control', 'no-store');
+
+  return redirect;
 }

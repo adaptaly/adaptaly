@@ -8,7 +8,6 @@ type Props = { invalidLink?: boolean };
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
-// Canonical base URL
 const baseUrl =
   (
     typeof window === 'undefined'
@@ -50,11 +49,11 @@ export default function ResetClient({ invalidLink }: Props) {
     setErrorSummary(null);
     setSubmitting(true);
     try {
-      // Privacy friendly
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: `${baseUrl}/auth/callback?next=/reset/confirm`,
       });
       if (error) {
+        // privacy friendly generic
         setErrorSummary('If this address is registered, we will send a reset link shortly.');
       }
       setShowCheckEmail(true);
@@ -96,9 +95,7 @@ export default function ResetClient({ invalidLink }: Props) {
               </a>
             </div>
 
-            <p className="r-provider-note">
-              Not seeing the email? Check spam, or wait a minute and try again.
-            </p>
+            <p className="r-provider-note">Not seeing the email? Check spam, or wait a minute and try again.</p>
 
             <div className="r-footer">
               <a href="/signin" className="link">Back to sign in</a>
