@@ -27,8 +27,8 @@ function SignInInner() {
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
 
-  // ensure we only clear the query param once
-  const clearedOnce = useRef(false);
+  // ensure we only handle/clear query+hash once per visit
+  const handledParamsOnce = useRef(false);
 
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
@@ -43,26 +43,72 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Show link-expired message once, then strip the query param
+  // Helper: parse error info from query AND from hash (Supabase sometimes uses fragments)
+  function readAuthError() {
+    // from query string
+    const qErr = params.get('error');
+    const qCode = params.get('error_code');
+    const qDesc = params.get('error_description');
+
+    // from hash fragment (#error=…&error_code=…&error_description=…)
+    let hErr: string | null = null;
+    let hCode: string | null = null;
+    let hDesc: string | null = null;
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const raw = window.location.hash.startsWith('#')
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+      const h = new URLSearchParams(raw);
+      hErr = h.get('error');
+      hCode = h.get('error_code');
+      hDesc = h.get('error_description');
+    }
+
+    // prefer query values, fall back to hash
+    const error = qErr || hErr;
+    const error_code = qCode || hCode;
+    const error_description = qDesc || hDesc;
+
+    return { error, error_code, error_description };
+  }
+
+  // Show link-expired/invalid message when applicable; then strip query+hash
   useEffect(() => {
-    const err = params.get('error');
-    if (err === 'link_expired' && !clearedOnce.current) {
-      clearedOnce.current = true;
-      setBanner({
-        kind: 'error',
-        text: 'Your verification link has expired or is invalid. Please sign in to request a new one.',
-        showResend: true,
-      });
-      // Remove ?error=... from the URL without a full navigation
+    if (handledParamsOnce.current) return;
+    const { error, error_code, error_description } = readAuthError();
+
+    if (error || error_code || error_description) {
+      handledParamsOnce.current = true;
+
+      // Normalize common cases:
+      // - error_code=otp_expired → show specific message + resend option
+      // - any other error → show description or a generic message
+      if (error_code === 'otp_expired') {
+        setBanner({
+          kind: 'error',
+          text: 'Your verification link has expired or is invalid. Please sign in to request a new one.',
+          showResend: true,
+        });
+      } else {
+        const text =
+          decodeURIComponent(error_description || error || 'Link invalid. Please sign in again.');
+        setBanner({ kind: 'error', text, showResend: true });
+      }
+
+      // Clean the URL (remove query + hash) without a full reload
       router.replace('/signin');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, router]);
 
   // Optional: resend verification email using the email typed in the form
   const resendVerification = async () => {
     if (!emailValid) {
       setTouched((t) => ({ ...t, email: true }));
-      setBanner({ kind: 'error', text: 'Enter a valid email above, then tap “Resend email” again.' });
+      setBanner({
+        kind: 'error',
+        text: 'Enter a valid email above, then tap “Resend email” again.',
+      });
       return;
     }
     const { error } = await supabase.auth.resend({
@@ -136,8 +182,16 @@ function SignInInner() {
             className="si-alert"
             role={banner.kind === 'error' ? 'alert' : 'status'}
             aria-live="polite"
-            // tiny visual tweak for info state (optional)
-            style={banner.kind === 'info' ? { background: '#f5fbff', borderColor: 'rgba(59,130,246,0.25)', color: '#1e3a8a' } : undefined}
+            // simple visual tweak for info state (optional)
+            style={
+              banner.kind === 'info'
+                ? {
+                    background: '#f5fbff',
+                    borderColor: 'rgba(59,130,246,0.25)',
+                    color: '#1e3a8a',
+                  }
+                : undefined
+            }
           >
             {banner.text}
             {banner.showResend && (
@@ -146,8 +200,14 @@ function SignInInner() {
                 <button
                   type="button"
                   onClick={resendVerification}
-                  // keep it subtle and inline with your existing style
-                  style={{ border: 0, background: 'transparent', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                  // inline link styling to match your UI; no extra CSS file needed
+                  style={{
+                    border: 0,
+                    background: 'transparent',
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
                 >
                   Resend email
                 </button>
