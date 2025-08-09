@@ -12,8 +12,9 @@ export const dynamic = 'force-dynamic';
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
 type Banner = { kind: 'error' | 'info' | 'success'; text: string; showResend?: boolean };
+type Provider = { name: 'gmail' | 'outlook'; url: string };
 
-function guessProvider(email: string) {
+function guessProvider(email: string): Provider {
   const domain = email.split('@')[1]?.toLowerCase() || '';
   if (domain.includes('gmail') || domain.includes('googlemail')) {
     return { name: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
@@ -21,6 +22,7 @@ function guessProvider(email: string) {
   if (domain.includes('outlook') || domain.includes('hotmail') || domain.includes('live')) {
     return { name: 'outlook', url: 'https://outlook.live.com/mail/0/inbox' };
   }
+  // default to gmail
   return { name: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
 }
 
@@ -37,7 +39,7 @@ function SignInInner() {
   const [touched, setTouched] = useState({ email: false, pw: false });
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
-  const [provider, setProvider] = useState<{ name: 'gmail' | 'outlook' | 'gmail'; url: string } | null>(null);
+  const [provider, setProvider] = useState<Provider | null>(null);
 
   // prevent loops; remember if we came here because of auth error
   const handledParamsOnce = useRef(false);
@@ -157,8 +159,6 @@ function SignInInner() {
       text: 'Verification email sent. Check your inbox.',
     });
 
-    // Optional gentle auto-open of the provider in a new tab (may be blocked by pop-up blockers).
-    // Comment out if you don't want this behavior.
     try {
       window.open(guessed.url, '_blank', 'noopener,noreferrer');
     } catch {
