@@ -1,29 +1,77 @@
-// middleware.ts (at project root)
-import { NextResponse, NextRequest } from 'next/server';
+// middleware.ts
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-/**
- * Run on all “real” app routes and preserve path + query.
- * This prevents magic links like
- *   https://adaptaly.com/auth/callback?code=...
- * from losing `?code=...` when we bounce to www.
- */
-export const config = {
-  matcher: [
-    // everything except Next internals, static assets, and API routes you might want to skip
-    '/((?!_next/|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|css|js|map|txt|xml|woff|woff2)|favicon\\.ico).*)',
-  ],
-};
+const PASS_THROUGH_PREFIXES = [
+  '/auth/callback',
+  '/reset',            // includes /reset and /reset/confirm
+];
 
-export default function middleware(req: NextRequest) {
-  const url = new URL(req.url);
+const AUTH_PAGES = ['/signin', '/signup'];
 
-  // 1) Canonicalize domain → force www (keep path + search)
-  // If you prefer apex, flip 'adaptaly.com' and 'www.adaptaly.com' accordingly.
-  if (url.hostname === 'adaptaly.com') {
-    url.hostname = 'www.adaptaly.com';
-    return NextResponse.redirect(url, 308); // 308 preserves method and is safe for auth links
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Skip static and Next internals
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/robots') ||
+    pathname.startsWith('/sitemap') ||
+    pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|txt|xml|woff2?)$/)
+  ) {
+    return NextResponse.next();
   }
 
-  // 2) Otherwise let the request through unchanged
-  return NextResponse.next();
+  // Do not interfere with callback and reset flows
+  if (PASS_THROUGH_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+    return NextResponse.next();
+  }
+
+  // Prepare response that can receive cookies from Supabase
+  const res = NextResponse.next();
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get: (name: string) => req.cookies.get(name)?.value,
+      set: (name: string, value: string, options: CookieOptions) => {
+        res.cookies.set({ name, value, ...options });
+      },
+      remove: (name: string, options: CookieOptions) => {
+        res.cookies.set({ name, value: '', ...options, maxAge: 0 });
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Protect your app pages
+  const requiresAuth =
+    pathname.startsWith('/dashboard'); // add more protected prefixes as needed
+
+  if (requiresAuth && !user) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/signin';
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
+  }
+
+  // If already signed in, keep users away from signin or signup
+  if (AUTH_PAGES.includes(pathname) && user) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
+  }
+
+  return res;
 }
+
+export const config = {
+  matcher: ['/((?!api/|_next/|static/|.*\\..*).*)'],
+};
