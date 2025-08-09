@@ -1,15 +1,17 @@
 // app/signin/page.tsx
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import './signin.css';
 
-// Avoid static prerender issues with useSearchParams in Next 15
+// Avoid static prerender warnings when using useSearchParams in Next 15
 export const dynamic = 'force-dynamic';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+
+type Banner = { kind: 'error' | 'info'; text: string; showResend?: boolean };
 
 function SignInInner() {
   const router = useRouter();
@@ -23,13 +25,16 @@ function SignInInner() {
 
   const [touched, setTouched] = useState({ email: false, pw: false });
   const [submitting, setSubmitting] = useState(false);
-  const [banner, setBanner] = useState<{ kind: 'error' | 'info'; text: string } | null>(null);
+  const [banner, setBanner] = useState<Banner | null>(null);
+
+  // ensure we only clear the query param once
+  const clearedOnce = useRef(false);
 
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwValid = useMemo(() => pw.trim().length > 0, [pw]);
   const formValid = emailValid && pwValid;
 
-  // If already authenticated, go straight to dashboard
+  // If already authenticated, skip to dashboard
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
@@ -38,13 +43,42 @@ function SignInInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Show a clear error when the callback indicated an expired/invalid link
+  // Show link-expired message once, then strip the query param
   useEffect(() => {
     const err = params.get('error');
-    if (err === 'link_expired') {
-      setBanner({ kind: 'error', text: 'Your verification link has expired or is invalid. Please sign in to request a new one.' });
+    if (err === 'link_expired' && !clearedOnce.current) {
+      clearedOnce.current = true;
+      setBanner({
+        kind: 'error',
+        text: 'Your verification link has expired or is invalid. Please sign in to request a new one.',
+        showResend: true,
+      });
+      // Remove ?error=... from the URL without a full navigation
+      router.replace('/signin');
     }
-  }, [params]);
+  }, [params, router]);
+
+  // Optional: resend verification email using the email typed in the form
+  const resendVerification = async () => {
+    if (!emailValid) {
+      setTouched((t) => ({ ...t, email: true }));
+      setBanner({ kind: 'error', text: 'Enter a valid email above, then tap “Resend email” again.' });
+      return;
+    }
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: { emailRedirectTo: `${location.origin}/auth/callback` },
+    });
+    if (error) {
+      setBanner({ kind: 'error', text: error.message });
+      return;
+    }
+    setBanner({
+      kind: 'info',
+      text: 'Verification email sent. Check your inbox.',
+    });
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +113,12 @@ function SignInInner() {
     <main className="si-background" role="main">
       <section className="si-card" aria-labelledby="si-title">
         <div className="si-topbar">
-          <button type="button" className="si-back" onClick={() => router.back()} aria-label="Go back">
+          <button
+            type="button"
+            className="si-back"
+            onClick={() => router.back()}
+            aria-label="Go back"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -93,8 +132,27 @@ function SignInInner() {
         </header>
 
         {banner && (
-          <div className="si-alert" role={banner.kind === 'error' ? 'alert' : 'status'} aria-live="polite">
+          <div
+            className="si-alert"
+            role={banner.kind === 'error' ? 'alert' : 'status'}
+            aria-live="polite"
+            // tiny visual tweak for info state (optional)
+            style={banner.kind === 'info' ? { background: '#f5fbff', borderColor: 'rgba(59,130,246,0.25)', color: '#1e3a8a' } : undefined}
+          >
             {banner.text}
+            {banner.showResend && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={resendVerification}
+                  // keep it subtle and inline with your existing style
+                  style={{ border: 0, background: 'transparent', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                >
+                  Resend email
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -183,7 +241,12 @@ function SignInInner() {
           </div>
 
           <div className="si-actions">
-            <button type="submit" className="si-btn-primary" disabled={!formValid || submitting} aria-busy={submitting}>
+            <button
+              type="submit"
+              className="si-btn-primary"
+              disabled={!formValid || submitting}
+              aria-busy={submitting}
+            >
               {submitting ? 'Signing in…' : 'Sign in'}
               {submitting && <span className="si-spinner" aria-hidden="true" />}
             </button>
