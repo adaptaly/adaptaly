@@ -10,10 +10,25 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const hasNumber = (s: string) => /\d/.test(s);
 const hasSpecial = (s: string) => /[^A-Za-z0-9]/.test(s);
 
-const siteUrl =
+// Base site URL used to build an absolute redirect for email verification
+const baseUrl =
   (typeof window === 'undefined'
     ? process.env.NEXT_PUBLIC_SITE_URL
-    : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin) || 'https://www.adaptaly.com';
+    : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin)?.replace(/\/$/, '') ||
+  'https://www.adaptaly.com';
+
+// Minimal helper to set an httpOnly cookie so /auth/callback can still recover the email
+async function setPendingEmailCookie(address: string) {
+  try {
+    await fetch('/api/pending-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: address }),
+    });
+  } catch {
+    // non-fatal
+  }
+}
 
 export default function EmailSignupPage() {
   const router = useRouter();
@@ -24,32 +39,43 @@ export default function EmailSignupPage() {
   const [pw, setPw] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
+
   const [touched, setTouched] = useState({ name: false, email: false, pw: false });
   const [submitting, setSubmitting] = useState(false);
   const [errorSummary, setErrorSummary] = useState<string | null>(null);
   const [showCheckEmail, setShowCheckEmail] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendMsg, setResendMsg] = useState<string | null>(null);
 
   const nameValid = useMemo(() => name.trim().length >= 2, [name]);
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwRules = useMemo(
-    () => ({ len: pw.length >= 8, num: hasNumber(pw), sym: hasSpecial(pw) }),
-    [pw],
+    () => ({
+      len: pw.length >= 8,
+      num: hasNumber(pw),
+      sym: hasSpecial(pw),
+    }),
+    [pw]
   );
   const pwValid = pwRules.len && pwRules.num && pwRules.sym;
   const formValid = nameValid && emailValid && pwValid;
 
-  async function setPendingCookie(address: string) {
-    try {
-      await fetch('/api/pending-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: address }),
-      });
-    } catch {
-      // ignore
+  const strength = useMemo(() => {
+    let s = 0;
+    if (pwRules.len) s++;
+    if (pwRules.num) s++;
+    if (pwRules.sym) s++;
+    if (pw.length >= 12) s++;
+    return Math.min(s, 4);
+  }, [pwRules, pw.length]);
+
+  function providerUrlGuess() {
+    const domain = email.split('@')[1]?.toLowerCase() || '';
+    if (domain.includes('gmail') || domain.includes('googlemail')) {
+      return { primary: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
     }
+    if (domain.includes('outlook') || domain.includes('hotmail') || domain.includes('live')) {
+      return { primary: 'outlook', url: 'https://outlook.live.com/mail/0/inbox' };
+    }
+    return { primary: 'gmail', url: 'https://mail.google.com/mail/u/0/#inbox' };
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -60,110 +86,116 @@ export default function EmailSignupPage() {
       const problems: string[] = [];
       if (!nameValid) problems.push('Enter your full name.');
       if (!emailValid) problems.push('Enter a valid email address.');
-      if (!pwValid) problems.push('Password must be at least 8 chars incl. a number and a symbol.');
+      if (!pwValid) problems.push('Password must be at least 8 chars, include a number and a symbol.');
       setErrorSummary(problems.join(' '));
       return;
     }
 
     setErrorSummary(null);
     setSubmitting(true);
-
     try {
-      // server-side existence check
-      const existsResp = await fetch('/api/auth/email-exists', {
+      // 1) Server check: does this email already exist?
+      const res = await fetch('/api/auth/email-exists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
-      })
-        .then((r) => r.json())
-        .catch(() => ({ exists: false }));
+      });
 
-      if (existsResp?.exists) {
-        setErrorSummary('An account with this email already exists. Try signing in.');
-        return;
-      }
+      if (res.ok) {
+        const { exists } = await res.json();
+        if (exists) {
+          setErrorSummary('An account with this email already exists. Try signing in instead.');
+          setEmail(''); // clear the email field
+          return;       // stop here — do NOT signUp and do NOT show “check your email”
+        }
+      } // if the check fails, we still try signUp and let Supabase error below
 
-      // Build redirect WITHOUT referencing `data`
-      const emailRedirectTo = `${siteUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(
-        email.trim(),
-      )}`;
+      // 2) Proceed with Supabase email sign-up when not existing
+      const clean = email.trim();
 
-      // Start signup
       const { error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: clean,
         password: pw,
         options: {
-          emailRedirectTo,
+          // include email so callback + signin can pick it up for resend
+          emailRedirectTo: `${baseUrl}/auth/callback?next=/dashboard&email=${encodeURIComponent(clean)}`,
           data: { full_name: name.trim() },
         },
       });
 
       if (error) {
+        // Catch Supabase “already registered” just in case
+        if (/already\s*registered/i.test(error.message) || /user.*exists/i.test(error.message)) {
+          setErrorSummary('An account with this email already exists. Try signing in instead.');
+          setEmail('');
+          return;
+        }
         setErrorSummary(error.message);
         return;
       }
 
-      // Set cookie so callback can recover email even if the client strips URL params
-      await setPendingCookie(email.trim());
+      // 3) Set a cookie fallback so /auth/callback can still recover the email
+      await setPendingEmailCookie(clean);
 
+      // Success → show confirmation screen
       setShowCheckEmail(true);
     } finally {
       setSubmitting(false);
     }
   };
 
-  async function resendConfirm() {
-    setResendMsg(null);
-    setResending(true);
-    const addr = email.trim().toLowerCase();
-    try {
-      const emailRedirectTo = `${window.location.origin}/auth/callback?next=/dashboard&email=${encodeURIComponent(
-        addr,
-      )}`;
-
-      // 1) Try normal signup resend
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: addr,
-        options: { emailRedirectTo },
-      });
-
-      if (!error) {
-        setResendMsg('Sent. Check your inbox.');
-        return;
-      }
-
-      // 2) Already confirmed → fall back to magic sign-in link
-      const { error: otpErr } = await supabase.auth.signInWithOtp({
-        email: addr,
-        options: { emailRedirectTo },
-      });
-
-      if (otpErr) setResendMsg(otpErr.message);
-      else setResendMsg('Sign-in link sent. Check your inbox.');
-    } finally {
-      setResending(false);
-    }
-  }
-
   if (showCheckEmail) {
+    const guess = providerUrlGuess();
+
     return (
       <main className="es-background">
         <section className="es-card" aria-live="polite">
+          <div className="es-topbar es-topbar--safe">
+            <button
+              type="button"
+              className="es-back"
+              onClick={() => router.push('/signin')}
+              aria-label="Back to sign in"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Back to sign in</span>
+            </button>
+          </div>
+
           <header className="es-head es-head--confirm">
             <h1 className="es-title">Check your email</h1>
             <p className="es-subtitle">
-              We sent a confirmation link to <strong>{email}</strong>.
+              We sent a confirmation link to <strong>{email}</strong>. Click it to finish creating your account.
             </p>
           </header>
 
-          <p className="es-provider-note">
-            Didn’t get it?
-            <button className="es-suggest-btn" onClick={resendConfirm} disabled={resending}>
-              {resending ? 'Resending…' : 'Resend confirmation'}
-            </button>
-            {resendMsg ? ` ${resendMsg}` : null}
-          </p>
+          <div className="es-provider-actions">
+            <p className="es-provider-hint">Open your inbox:</p>
+            <div className="es-provider-buttons">
+              <a
+                className={`es-btn-secondary ${guess.primary === 'gmail' ? 'is-suggested' : ''}`}
+                href="https://mail.google.com/mail/u/0/#inbox"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Gmail
+              </a>
+              <a
+                className={`es-btn-secondary ${guess.primary === 'outlook' ? 'is-suggested' : ''}`}
+                href="https://outlook.live.com/mail/0/inbox"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Outlook
+              </a>
+            </div>
+
+            <p className="es-provider-note">
+              Didn’t get an email? Check your spam folder, or wait a minute and try again.
+            </p>
+          </div>
         </section>
       </main>
     );
@@ -171,66 +203,162 @@ export default function EmailSignupPage() {
 
   return (
     <main className="es-background" role="main">
-      <section className="es-card">
-        <h1 className="es-title">Create your account</h1>
+      <section className="es-card" aria-labelledby="es-title">
+        <div className="es-topbar es-topbar--safe">
+          <button type="button" className="es-back" onClick={() => router.back()} aria-label="Go back">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Back</span>
+          </button>
+        </div>
+
+        <header className="es-head">
+          <h1 id="es-title" className="es-title">Sign up with Email</h1>
+          <p className="es-subtitle">Create your Adaptaly account in less than a minute.</p>
+        </header>
 
         {errorSummary && (
-          <div className="es-alert" role="alert" aria-live="polite">{errorSummary}</div>
+          <div className="es-alert" role="alert" aria-live="polite">
+            {errorSummary}
+          </div>
         )}
 
         <form className="es-form" onSubmit={submit} noValidate>
-          {/* Full Name */}
+          {/* Name */}
           <div className="es-field">
             <label htmlFor="name" className="es-label">Full name</label>
-            <input
-              id="name"
-              className="es-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-              placeholder="Your name"
-            />
+            <div className={`es-input-wrap ${touched.name && !nameValid ? 'is-invalid' : ''}`}>
+              <input
+                id="name"
+                type="text"
+                className="es-input"
+                placeholder="Chris Post"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+                aria-invalid={touched.name && !nameValid}
+              />
+            </div>
+            <div className="es-hint">
+              {touched.name && !nameValid
+                ? 'Enter your real name for your learning profile.'
+                : 'Use your real name for your learning profile.'}
+            </div>
           </div>
 
           {/* Email */}
           <div className="es-field">
-            <label htmlFor="email" className="es-label">Email</label>
-            <input
-              id="email"
-              type="email"
-              className="es-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={() => setTouched((t) => ({ ...t, email: true }))}
-              placeholder="you@example.com"
-              autoComplete="email"
-            />
+            <label htmlFor="email" className="es-label">Email address</label>
+            <div className={`es-input-wrap ${touched.email && !emailValid ? 'is-invalid' : ''} ${emailValid ? 'is-valid' : ''}`}>
+              <svg className="es-input-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 6h16v12H4z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M4 7l8 6 8-6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <input
+                id="email"
+                type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                autoComplete="email"
+                className="es-input has-icon"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+                aria-invalid={touched.email && !emailValid}
+              />
+              {emailValid && (
+                <svg className="es-valid-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+            <div className="es-hint">
+              {touched.email && !emailValid
+                ? 'Enter a valid email like name@example.com.'
+                : 'We will send a confirmation to this address.'}
+            </div>
           </div>
 
           {/* Password */}
           <div className="es-field">
             <label htmlFor="password" className="es-label">Password</label>
-            <input
-              id="password"
-              type={showPw ? 'text' : 'password'}
-              className="es-input"
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              onBlur={() => setTouched((t) => ({ ...t, pw: true }))}
-              onKeyUp={(e) => setCapsLock(e.getModifierState?.('CapsLock') ?? false)}
-              placeholder="At least 8 chars, number, symbol"
-              autoComplete="new-password"
-            />
-            <button type="button" className="es-toggle" onClick={() => setShowPw((s) => !s)}>
-              {showPw ? 'Hide' : 'Show'}
-            </button>
-            {capsLock && <div className="es-hint">Caps Lock is on.</div>}
+            <div className={`es-input-wrap ${touched.pw && !pwValid ? 'is-invalid' : ''}`}>
+              <svg className="es-input-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 10h12v10H6z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M8 10V8a4 4 0 118 0v2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+              <input
+                id="password"
+                type={showPw ? 'text' : 'password'}
+                autoCapitalize="none"
+                autoComplete="new-password"
+                className="es-input has-icon has-trailing"
+                placeholder="Create a strong password"
+                value={pw}
+                onChange={(e) => setPw(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, pw: true }))}
+                onKeyUp={(e) => setCapsLock(e.getModifierState && e.getModifierState('CapsLock'))}
+                aria-invalid={touched.pw && !pwValid}
+                onKeyDown={(e) => { if (e.key === 'Enter') submit(e as unknown as React.FormEvent); }}
+              />
+              <button
+                type="button"
+                className="es-toggle"
+                onClick={() => setShowPw((s) => !s)}
+                aria-label={showPw ? 'Hide password' : 'Show password'}
+              >
+                {showPw ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    <path d="M10.6 10.6a3 3 0 004.24 4.24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                )}
+              </button>
+            </div>
+
+            {capsLock && <div className="es-caps" role="note">Caps Lock is on.</div>}
+
+            <ul className="es-checks" aria-live="polite">
+              <li className={pwRules.len ? 'ok' : ''}>At least 8 characters</li>
+              <li className={pwRules.num ? 'ok' : ''}>At least 1 number</li>
+              <li className={pwRules.sym ? 'ok' : ''}>At least 1 special symbol</li>
+            </ul>
+
+            <div className="es-strength">
+              <div className={`bar s-${strength}`} />
+              <span className="label">
+                {strength <= 1 ? 'Weak' : strength === 2 ? 'Okay' : strength === 3 ? 'Good' : 'Strong'}
+              </span>
+            </div>
           </div>
 
+          <p className="es-legal">
+            By creating an account, you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a>.
+          </p>
+
           <div className="es-actions">
-            <button type="submit" className="es-btn-primary" disabled={!formValid || submitting}>
-              {submitting ? 'Creating…' : 'Create account'}
+            <button
+              type="submit"
+              className="es-btn-primary"
+              disabled={!formValid || submitting}
+              aria-busy={submitting}
+            >
+              {submitting ? 'Creating…' : 'Create Account'}
+              {submitting && <span className="es-spinner" aria-hidden="true" />}
             </button>
+
+            <div className="es-footer">
+              <span className="small">Already have an account?</span>
+              <a href="/signin" className="link">Sign in</a>
+            </div>
           </div>
         </form>
       </section>
