@@ -1,102 +1,116 @@
 /* app/(auth)/reset/reset.css */
+:root {
+  /* fallback palette if variables are missing */
+  --bg: var(--background, #f7f8fb);
+  --card: var(--card, #fff);
+  --fg: var(--foreground, #0f172a);
+  --muted: var(--muted, #64748b);
+  --border: var(--border, #e5e7eb);
+  --primary: var(--primary, #2563eb);
+  --primary-contrast: var(--primary-contrast, #fff);
+  --ring: var(--ring, rgba(37, 99, 235, .3));
+}
+
 .reset-wrap {
-    min-height: 100dvh;
-    display: grid;
-    place-items: center;
-    background: var(--background, #f8fafc);
-    padding: 24px;
-  }
-  
-  .reset-card {
-    width: 100%;
-    max-width: 420px;
-    background: var(--card, #fff);
-    border: 1px solid rgba(0,0,0,.06);
-    border-radius: 16px;
-    padding: 24px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.06);
-  }
-  
-  .reset-title {
-    font-size: 22px;
-    font-weight: 700;
-    margin-bottom: 14px;
-    color: var(--foreground, #0f172a);
-  }
-  
-  .reset-message {
-    font-size: 14px;
-    line-height: 1.45;
-    color: #334155;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 14px;
-  }
-  
-  .reset-form {
-    display: grid;
-    gap: 12px;
-    margin-top: 6px;
-  }
-  
-  .reset-label {
-    font-size: 12px;
-    color: #475569;
-  }
-  
-  .reset-input-wrap {
-    display: grid;
-    grid-template-columns: 18px 1fr;
-    align-items: center;
-    gap: 10px;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 10px 12px;
-    background: #fff;
-  }
-  
-  .reset-mail {
-    fill: #64748b;
-    display: block;
-  }
-  
-  .reset-input {
-    border: 0;
-    outline: none;
-    font-size: 14px;
-    width: 100%;
-    background: transparent;
-    color: #0f172a;
-  }
-  
-  .reset-input::placeholder {
-    color: #94a3b8;
-  }
-  
-  .reset-btn {
-    margin-top: 8px;
-    width: 100%;
-    border: 0;
-    border-radius: 12px;
-    padding: 12px 16px;
-    font-weight: 600;
-    font-size: 14px;
-    background: #0f172a;
-    color: white;
-    cursor: pointer;
-  }
-  
-  .reset-btn[disabled] {
-    opacity: .65;
-    cursor: not-allowed;
-  }
-  
-  .reset-back {
-    display: inline-block;
-    margin-top: 14px;
-    font-size: 13px;
-    color: #475569;
-    text-decoration: none;
-  }
-  .reset-back:hover { text-decoration: underline; }  
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.reset-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.05);
+}
+
+.reset-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+
+.reset-message {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: color-mix(in oklab, var(--bg), #fff 50%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.reset-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.reset-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.reset-input-wrap {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.reset-mail {
+  fill: var(--muted);
+  display: block;
+}
+
+.reset-input {
+  border: 0;
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+  background: transparent;
+  color: var(--fg);
+}
+.reset-input::placeholder { color: color-mix(in oklab, var(--muted), #94a3b8 30%); }
+
+.reset-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+.reset-btn {
+  margin-top: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  cursor: pointer;
+  transition: transform .02s ease, opacity .2s ease;
+}
+.reset-btn:active { transform: translateY(1px); }
+.reset-btn[disabled] { opacity: .7; cursor: not-allowed; }
+
+.reset-back {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.reset-back:hover { text-decoration: underline; }

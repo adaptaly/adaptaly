@@ -29,7 +29,7 @@ function parseHash(): Record<string, string> {
 
 export default function ConfirmClient() {
   const router = useRouter();
-  const params = useSearchParams(); // requires Suspense in the parent
+  const params = useSearchParams(); // parent page wraps this in <Suspense>
   const supabase = useSupabase();
 
   const [ready, setReady] = useState<"checking" | "ok" | "invalid">("checking");
@@ -46,7 +46,7 @@ export default function ConfirmClient() {
     let cancelled = false;
 
     async function ensureSession() {
-      // 1) New links: ?code=...&type=recovery
+      // 1) Newer links: /reset/confirm?code=...&type=recovery
       const code = params.get("code");
       const type = params.get("type");
       if (code && type === "recovery") {
@@ -55,7 +55,7 @@ export default function ConfirmClient() {
         return;
       }
 
-      // 2) Legacy: tokens in the URL hash
+      // 2) Legacy hash tokens: #access_token=...&refresh_token=...
       const h = parseHash();
       if (h.access_token && h.refresh_token) {
         const { error } = await supabase.auth.setSession({
@@ -97,7 +97,8 @@ export default function ConfirmClient() {
       return;
     }
 
-    router.replace("/dashboard");
+    // Hard navigate to ensure a fresh server render of /dashboard
+    window.location.assign("/dashboard");
   }
 
   if (ready === "checking") {
@@ -126,6 +127,7 @@ export default function ConfirmClient() {
     <main className="confirm-wrap">
       <section className="confirm-card">
         <h1 className="confirm-title">Set a new password</h1>
+
         <form onSubmit={onSubmit} className="confirm-form">
           <label className="confirm-label" htmlFor="pw">New password</label>
           <div className="confirm-input-wrap">
@@ -138,6 +140,7 @@ export default function ConfirmClient() {
               placeholder="Enter a strong password"
               autoComplete="new-password"
               required
+              inputMode="text"
             />
             <button
               type="button"
@@ -155,7 +158,7 @@ export default function ConfirmClient() {
             </button>
           </div>
 
-          <div className="confirm-strength">
+          <div className="confirm-strength" aria-hidden>
             <div className={`bar ${strength >= 1 ? "on" : ""}`}></div>
             <div className={`bar ${strength >= 2 ? "on" : ""}`}></div>
             <div className={`bar ${strength >= 3 ? "on" : ""}`}></div>
@@ -173,6 +176,7 @@ export default function ConfirmClient() {
               placeholder="Repeat your password"
               autoComplete="new-password"
               required
+              inputMode="text"
             />
             <button
               type="button"
@@ -190,6 +194,7 @@ export default function ConfirmClient() {
             </button>
           </div>
 
+          {/* Requirements + errors */}
           {!ok && (
             <ul className="confirm-issues">
               {issues.map((it: string) => <li key={it}>{it}</li>)}

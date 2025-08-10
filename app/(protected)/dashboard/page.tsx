@@ -1,23 +1,24 @@
-import { redirect } from 'next/navigation';
-import { supabaseServer } from '@/lib/supabaseServer';
+// app/(protected)/dashboard/page.tsx
+import { redirect } from "next/navigation";
+// use your relative path (or switch to "@/..." if you add a tsconfig path alias)
+import { getServerSupabaseReadOnly } from "../../../src/lib/supabaseServer";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function DashboardPage() {
-  const supabase = await supabaseServer(); // <-- await the async helper
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getServerSupabaseReadOnly(); // await — important in Next 15
+  const { data } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect('/signin');
+  if (!data.user) {
+    redirect("/signin");
   }
 
   return (
     <main style={{ padding: 24 }}>
       <h1>Dashboard</h1>
-      <p>Hello {user.email}</p>
-      <form action="/api/signout" method="post">
-        <button>Sign out</button>
-      </form>
+      <p>Welcome back, {data.user.email}</p>
+      {/* your real dashboard UI */}
     </main>
   );
 }
