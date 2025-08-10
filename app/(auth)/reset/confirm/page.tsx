@@ -1,12 +1,15 @@
 // app/(auth)/reset/confirm/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-// swap alias for a stable relative import
 import { validatePassword, calcStrength } from "../../../../src/lib/password";
 import "./confirm.css";
+
+// Ensure this page is not statically generated
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function useSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -21,6 +24,7 @@ function parseHash(): Record<string, string> {
   if (typeof window === "undefined") return {};
   const hash = window.location.hash.replace(/^#/, "");
   const out: Record<string, string> = {};
+  if (!hash) return out;
   for (const part of hash.split("&")) {
     const [k, v] = part.split("=");
     if (k) out[decodeURIComponent(k)] = decodeURIComponent(v || "");
@@ -28,9 +32,9 @@ function parseHash(): Record<string, string> {
   return out;
 }
 
-export default function ResetConfirmPage() {
+function ConfirmInner() {
   const router = useRouter();
-  const params = useSearchParams();
+  const params = useSearchParams(); // must live under Suspense
   const supabase = useSupabase();
 
   const [ready, setReady] = useState<"checking" | "ok" | "invalid">("checking");
@@ -47,42 +51,37 @@ export default function ResetConfirmPage() {
     let cancelled = false;
 
     async function ensureSession() {
-      // 1) Newer links provide ?code=...&type=recovery
+      // 1) Newer links: ?code=...&type=recovery
       const code = params.get("code");
       const type = params.get("type");
       if (code && type === "recovery") {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!cancelled) {
-          setReady(error ? "invalid" : "ok");
-        }
+        if (!cancelled) setReady(error ? "invalid" : "ok");
         return;
       }
 
-      // 2) Older links may include tokens in the URL hash
+      // 2) Legacy hash tokens
       const h = parseHash();
       if (h.access_token && h.refresh_token) {
         const { error } = await supabase.auth.setSession({
           access_token: h.access_token,
           refresh_token: h.refresh_token,
         });
-        if (!cancelled) {
-          setReady(error ? "invalid" : "ok");
-        }
+        if (!cancelled) setReady(error ? "invalid" : "ok");
         return;
       }
 
-      // 3) Maybe the session is already active
+      // 3) Maybe already signed in
       const { data } = await supabase.auth.getUser();
-      if (!cancelled) {
-        setReady(data.user ? "ok" : "invalid");
-      }
+      if (!cancelled) setReady(data.user ? "ok" : "invalid");
     }
 
     ensureSession();
     return () => {
       cancelled = true;
     };
-  }, [params, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,21 +96,21 @@ export default function ResetConfirmPage() {
 
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password: pw });
-
     if (error) {
       setBusy(false);
       setError("Could not update password. The link may be invalid or expired.");
       return;
     }
 
-    // Password updated, session is valid. Go to dashboard.
     router.replace("/dashboard");
   }
 
   if (ready === "checking") {
     return (
       <main className="confirm-wrap">
-        <section className="confirm-card"><div className="confirm-loading">Checking your link…</div></section>
+        <section className="confirm-card">
+          <div className="confirm-loading">Checking your link…</div>
+        </section>
       </main>
     );
   }
@@ -212,5 +211,17 @@ export default function ResetConfirmPage() {
         </form>
       </section>
     </main>
+  );
+}
+
+export default function ResetConfirmPage() {
+  return (
+    <Suspense fallback={
+      <main className="confirm-wrap">
+        <section className="confirm-card"><div className="confirm-loading">Loading…</div></section>
+      </main>
+    }>
+      <ConfirmInner />
+    </Suspense>
   );
 }
