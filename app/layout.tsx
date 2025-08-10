@@ -1,5 +1,5 @@
 // app/layout.tsx
-import '../styles/global.css'
+import './globals.css'
 
 export const metadata = {
   title: 'Adaptaly Beta',
