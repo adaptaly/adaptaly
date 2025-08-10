@@ -1,10 +1,10 @@
-// app/(auth)/reset/confirm/ConfirmClient.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseClient';
 import { validatePassword, calcStrength } from '@/lib/password';
+import './confirm.css';
 
 function parseHash(): Record<string, string> {
   if (typeof window === 'undefined') return {};
@@ -21,7 +21,7 @@ function parseHash(): Record<string, string> {
 export default function ConfirmClient() {
   const router = useRouter();
   const params = useSearchParams();
-  const supabase = useMemo(() => supabaseBrowser(true), []);
+  const supabase = useMemo(() => supabaseBrowser(), []); // <-- no arguments
 
   const [ready, setReady] = useState<'checking' | 'ok' | 'invalid'>('checking');
   const [pw, setPw] = useState('');
