@@ -1,7 +1,7 @@
 // app/(protected)/dashboard/page.tsx
 import { redirect } from "next/navigation";
 // use your relative path (or switch to "@/..." if you add a tsconfig path alias)
-import { getServerSupabaseReadOnly } from "../../../src/lib/supabaseServer";
+import { getServerSupabaseReadOnly } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

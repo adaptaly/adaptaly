@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 // swap alias for a stable relative import
-import { getBaseUrl } from "../../../../src/lib/urls";
+import { getBaseUrl } from "@/lib/urls";
 
 export async function POST(req: Request) {
   try {

@@ -7,39 +7,41 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /**
  * Read-only server client for Server Components (RSC).
- * Note: In Next 15, cookies() is async, so we await it here.
- * We NO-OP setAll() to avoid mutating cookies during RSC render.
+ * In Next 15, cookies() is async. We NO-OP setAll() to avoid
+ * "Cookies can only be modified..." during render.
  */
 export async function getServerSupabaseReadOnly() {
-  const cookieStore = await cookies(); // NEXT 15: cookies() is async
+  const cookieStore = await cookies();
 
   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
       },
-      // Do not mutate cookies in RSCs; use a Route Handler or Server Action instead.
-      setAll(_cookies: any) {
-        // no-op on purpose
+      setAll(_cookies: { name: string; value: string; options: any }[]) {
+        // no-op on purpose in RSC
       },
     },
   });
 }
 
 /**
- * Example writable client for Route Handlers / Server Actions (when you DO want to set cookies):
- *
- * export async function getServerSupabaseWritable() {
- *   const cookieStore = await cookies();
- *   return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
- *     cookies: {
- *       getAll: () => cookieStore.getAll(),
- *       setAll: (cookiesToSet) => {
- *         cookiesToSet.forEach(({ name, value, options }) => {
- *           cookieStore.set(name, value, options);
- *         });
- *       },
- *     },
- *   });
- * }
+ * Writable server client for Route Handlers and Server Actions.
+ * Use this when you DO want to mutate auth cookies (signout, etc).
  */
+export async function getServerSupabaseWritable() {
+  const cookieStore = await cookies();
+
+  return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set(name, value, options);
+        });
+      },
+    },
+  });
+}
