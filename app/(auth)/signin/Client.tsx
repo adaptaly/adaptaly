@@ -1,30 +1,38 @@
-// app/signin/Client.tsx
+// app/(auth)/signin/Client.tsx
 'use client';
 
 import './signin.css';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabaseBrowser } from '@/lib/supabaseClient';
+import { supabaseBrowser, supabaseForAuth } from '@/lib/supabaseClient';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+
+// If you already have a baseUrl helper, use that instead
+const baseUrl =
+  (typeof window === 'undefined'
+    ? process.env.NEXT_PUBLIC_SITE_URL
+    : process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+  )?.replace(/\/$/, '') || 'https://www.adaptaly.com';
 
 export default function SignInPageClient() {
   const router = useRouter();
   const search = useSearchParams();
 
-  // Use default (remember=true) client for pre-checks
-  const supabase = supabaseBrowser(true);
+  // Default client (no args)
+  const supabase = supabaseBrowser();
 
   const invalidLink = search.get('invalidLink') === '1';
 
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
-  const [remember, setRemember] = useState(true); // NEW
+  const [remember, setRemember] = useState(true); // drives persistSession
   const [showPw, setShowPw] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
   const [touched, setTouched] = useState({ email: false, pw: false });
   const [submitting, setSubmitting] = useState(false);
   const [errorSummary, setErrorSummary] = useState<string | null>(null);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const emailValid = useMemo(() => emailRegex.test(email.trim()), [email]);
   const pwValid = useMemo(() => pw.length > 0, [pw]);
@@ -38,6 +46,22 @@ export default function SignInPageClient() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const signInWithGoogle = async () => {
+    if (isGoogleLoading || submitting) return;
+    setIsGoogleLoading(true);
+    try {
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${baseUrl}/auth/callback?next=/dashboard`,
+        },
+      });
+      // redirects away
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,8 +78,8 @@ export default function SignInPageClient() {
     setErrorSummary(null);
     setSubmitting(true);
     try {
-      // IMPORTANT: create a client with chosen persistence
-      const sb = supabaseBrowser(remember);
+      // IMPORTANT: create a one-off client with chosen persistence
+      const sb = supabaseForAuth(remember);
 
       const { error } = await sb.auth.signInWithPassword({
         email: email.trim(),
@@ -83,8 +107,11 @@ export default function SignInPageClient() {
             This verification link has expired. Please sign in with your email and password.
           </div>
         )}
-
         {errorSummary && <div className="si-alert" role="alert">{errorSummary}</div>}
+
+        {/* (Optional) Google button if you kept it */}
+        {/* <button type="button" className="si-btn-google" onClick={signInWithGoogle} disabled={isGoogleLoading || submitting}> ... </button>
+        <div className="si-oauth-or" aria-hidden="true"><div className="line" /><div className="text">or</div><div className="line" /></div> */}
 
         <form className="si-form" onSubmit={submit} noValidate>
           {/* Email */}
@@ -132,18 +159,11 @@ export default function SignInPageClient() {
                 aria-label={showPw ? 'Hide password' : 'Show password'}
                 title={showPw ? 'Hide password' : 'Show password'}
               >
-                {showPw ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                    <path d="M10.6 10.6a3 3 0 004.24 4.24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                )}
+                {/* your eye icon(s) */}
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
               </button>
             </div>
             {capsLock && <div className="si-caps">Caps Lock is on.</div>}
