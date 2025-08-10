@@ -13,11 +13,16 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
+
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@/lib/*": ["src/lib/*"]
+      "@/lib/*": ["src/lib/*"],
+      "@/app/*": ["app/*"],
+      "@/public/*": ["public/*"],
+      "@/src/*": ["src/*"],
+      "@/*": ["*"]
     },
+
     "incremental": true,
     "plugins": [{ "name": "next" }]
   },
