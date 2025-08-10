@@ -11,12 +11,15 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 export default function SignInPageClient() {
   const router = useRouter();
   const search = useSearchParams();
-  const supabase = supabaseBrowser();
+
+  // Use default (remember=true) client for pre-checks
+  const supabase = supabaseBrowser(true);
 
   const invalidLink = search.get('invalidLink') === '1';
 
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  const [remember, setRemember] = useState(true); // NEW
   const [showPw, setShowPw] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
   const [touched, setTouched] = useState({ email: false, pw: false });
@@ -51,7 +54,10 @@ export default function SignInPageClient() {
     setErrorSummary(null);
     setSubmitting(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      // IMPORTANT: create a client with chosen persistence
+      const sb = supabaseBrowser(remember);
+
+      const { error } = await sb.auth.signInWithPassword({
         email: email.trim(),
         password: pw,
       });
@@ -72,7 +78,6 @@ export default function SignInPageClient() {
           <h1 id="si-title" className="si-title">Sign in</h1>
         </header>
 
-        {/* Single clean message. No resend button anywhere. */}
         {invalidLink && (
           <div className="si-alert" role="alert" aria-live="polite">
             This verification link has expired. Please sign in with your email and password.
@@ -128,14 +133,12 @@ export default function SignInPageClient() {
                 title={showPw ? 'Hide password' : 'Show password'}
               >
                 {showPw ? (
-                  // Eye-off
                   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                     <path d="M10.6 10.6a3 3 0 004.24 4.24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                     <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
                   </svg>
                 ) : (
-                  // Eye
                   <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
                     <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -144,6 +147,19 @@ export default function SignInPageClient() {
               </button>
             </div>
             {capsLock && <div className="si-caps">Caps Lock is on.</div>}
+          </div>
+
+          {/* Remember me */}
+          <div className="si-row">
+            <label className="si-remember">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                aria-label="Remember me"
+              />
+              Remember me
+            </label>
           </div>
 
           <div className="si-actions">

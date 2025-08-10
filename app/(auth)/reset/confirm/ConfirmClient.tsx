@@ -21,7 +21,7 @@ function parseHash(): Record<string, string> {
 export default function ConfirmClient() {
   const router = useRouter();
   const params = useSearchParams();
-  const supabase = useMemo(() => supabaseBrowser(), []);
+  const supabase = useMemo(() => supabaseBrowser(true), []);
 
   const [ready, setReady] = useState<'checking' | 'ok' | 'invalid'>('checking');
   const [pw, setPw] = useState('');
@@ -36,7 +36,6 @@ export default function ConfirmClient() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // 1) New links
       const code = params.get('code');
       const type = params.get('type');
       if (code && type === 'recovery') {
@@ -44,7 +43,6 @@ export default function ConfirmClient() {
         if (!cancelled) setReady(error ? 'invalid' : 'ok');
         return;
       }
-      // 2) Legacy tokens in hash
       const h = parseHash();
       if (h.access_token && h.refresh_token) {
         const { error } = await supabase.auth.setSession({
@@ -54,11 +52,12 @@ export default function ConfirmClient() {
         if (!cancelled) setReady(error ? 'invalid' : 'ok');
         return;
       }
-      // 3) Maybe already signed in
       const { data } = await supabase.auth.getUser();
       if (!cancelled) setReady(data.user ? 'ok' : 'invalid');
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
@@ -80,8 +79,7 @@ export default function ConfirmClient() {
       setError('Could not update password. The link may be invalid or expired.');
       return;
     }
-
-    // Fresh server render of the dashboard
+    // hard navigation to ensure fresh server auth state
     window.location.assign('/dashboard');
   }
 
@@ -97,6 +95,14 @@ export default function ConfirmClient() {
     return (
       <main className="rc-background">
         <section className="rc-card">
+          <div className="rc-topbar rc-topbar--safe">
+            <button type="button" className="rc-back" onClick={() => router.push('/reset')} aria-label="Back">
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Back</span>
+            </button>
+          </div>
           <h1 className="rc-title">Link expired or invalid</h1>
           <p className="rc-subtitle">No worries. Request a fresh link and try again.</p>
           <a className="rc-btn" href="/reset">Request new link</a>
@@ -108,6 +114,22 @@ export default function ConfirmClient() {
   return (
     <main className="rc-background" role="main">
       <section className="rc-card" aria-labelledby="rc-title">
+        {/* Back pill is placed in normal flow on all screens to avoid overlap */}
+        <div className="rc-topbar rc-topbar--safe">
+          <button
+            type="button"
+            className="rc-back"
+            onClick={() => router.push('/signin')}
+            aria-label="Back to sign in"
+            title="Back to sign in"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Back to sign in</span>
+          </button>
+        </div>
+
         <header className="rc-head">
           <h1 id="rc-title" className="rc-title">Set a new password</h1>
         </header>
@@ -144,10 +166,10 @@ export default function ConfirmClient() {
             </div>
 
             <div className="rc-strength" aria-hidden>
-              <div className={`bar ${strength >= 1 ? 'on' : ''}`}></div>
-              <div className={`bar ${strength >= 2 ? 'on' : ''}`}></div>
-              <div className={`bar ${strength >= 3 ? 'on' : ''}`}></div>
-              <div className={`bar ${strength >= 4 ? 'on' : ''}`}></div>
+              <div className={`bar ${strength >= 1 ? 'on' : ''}`} />
+              <div className={`bar ${strength >= 2 ? 'on' : ''}`} />
+              <div className={`bar ${strength >= 3 ? 'on' : ''}`} />
+              <div className={`bar ${strength >= 4 ? 'on' : ''}`} />
             </div>
           </div>
 
@@ -182,10 +204,9 @@ export default function ConfirmClient() {
             </div>
           </div>
 
-          {/* Requirements + errors */}
           {!ok && (
             <ul className="rc-issues">
-              {issues.map((it: string) => <li key={it}>{it}</li>)}
+              {issues.map((item) => <li key={item}>{item}</li>)}
             </ul>
           )}
           {pw2.length > 0 && !confirmMatch && (

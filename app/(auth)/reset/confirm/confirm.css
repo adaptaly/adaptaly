@@ -1,4 +1,4 @@
-/* Reset Confirm — Adaptaly style */
+/* Reset Confirm — Adaptaly style, with non-overlapping topbar */
 
 :root{
   --primary:#4BC3B7;
@@ -30,7 +30,20 @@ html, body{ margin:0; padding:0; height:100%; background:var(--bg); color:var(--
   padding:16px 20px 12px; box-sizing:border-box; position:relative;
 }
 
-.rc-head{ text-align:center; padding-top:6px; }
+/* Topbar: ALWAYS in normal flow to avoid overlap */
+.rc-topbar{ position:relative; margin-bottom:12px; }
+.rc-back{
+  appearance:none; -webkit-appearance:none;
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 10px; border:1px solid rgba(0,0,0,.10);
+  border-radius:999px; background:#fff; color:#374151; font-size:14px;
+  cursor:pointer; transition:background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.rc-back:hover{ background:#f3f4f6; box-shadow:0 2px 8px rgba(0,0,0,.06); transform:translateY(-1px); }
+.rc-back:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--ring); }
+
+/* Header */
+.rc-head{ text-align:center; padding-top:0; }
 .rc-title{ margin:0; font-size:clamp(23px, 2.6vw, 27px); font-weight:800; letter-spacing:-.01em; color:#0B0B0F; }
 .rc-subtitle{ margin:8px auto 0; color:var(--muted); font-size:14.5px; line-height:1.5; max-width:42ch; }
 
@@ -76,6 +89,7 @@ html, body{ margin:0; padding:0; height:100%; background:var(--bg); color:var(--
 
 .rc-loading{ font-size:14px; color:#6b7280; }
 
+/* mobile tweaks */
 @media (max-width:420px){
   .rc-background{
     padding:
