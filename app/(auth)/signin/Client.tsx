@@ -47,6 +47,7 @@ export default function SignInPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Optional Google sign-in (keep if you already added the button)
   const signInWithGoogle = async () => {
     if (isGoogleLoading || submitting) return;
     setIsGoogleLoading(true);
@@ -95,9 +96,28 @@ export default function SignInPageClient() {
     }
   };
 
+  // Back button handler: go back if possible, else go home
+  const goBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/');
+    }
+  };
+
   return (
     <main className="si-background" role="main">
       <section className="si-card" aria-labelledby="si-title">
+        {/* NEW: topbar back button sits in normal flow, so it never overlaps */}
+        <div className="si-topbar">
+          <button type="button" className="si-back" onClick={goBack} aria-label="Go back">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Back</span>
+          </button>
+        </div>
+
         <header className="si-head">
           <h1 id="si-title" className="si-title">Sign in</h1>
         </header>
@@ -109,9 +129,22 @@ export default function SignInPageClient() {
         )}
         {errorSummary && <div className="si-alert" role="alert">{errorSummary}</div>}
 
-        {/* (Optional) Google button if you kept it */}
-        {/* <button type="button" className="si-btn-google" onClick={signInWithGoogle} disabled={isGoogleLoading || submitting}> ... </button>
-        <div className="si-oauth-or" aria-hidden="true"><div className="line" /><div className="text">or</div><div className="line" /></div> */}
+        {/* Optional Google button + divider (keep if you already added it) */}
+        {/* <button
+          type="button"
+          className="si-btn-google"
+          aria-label="Sign in with Google"
+          onClick={signInWithGoogle}
+          disabled={isGoogleLoading || submitting}
+        >
+          <svg className="g" viewBox="-3 0 262 262" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">...</svg>
+          <span>{isGoogleLoading ? 'Please wait…' : 'Sign in with Google'}</span>
+        </button>
+        <div className="si-oauth-or" aria-hidden="true">
+          <div className="line" />
+          <div className="text">or</div>
+          <div className="line" />
+        </div> */}
 
         <form className="si-form" onSubmit={submit} noValidate>
           {/* Email */}
@@ -159,7 +192,6 @@ export default function SignInPageClient() {
                 aria-label={showPw ? 'Hide password' : 'Show password'}
                 title={showPw ? 'Hide password' : 'Show password'}
               >
-                {/* your eye icon(s) */}
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
                   <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.6" />
