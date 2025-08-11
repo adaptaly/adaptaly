@@ -1,18 +1,13 @@
 import React from "react";
 import "./upload.css";
 import Dropzone from "./_components/Dropzone";
-import HowItWorks from "./_components/HowItWorks";
-import ExamplePreview from "./_components/ExamplePreview";
-import PrivacyNote from "./_components/PrivacyNote";
-import RecentUploads from "./_components/RecentUploads";
+import InfoChips from "./_components/InfoChips";
 
-export const metadata = {
-  title: "Upload | Adaptaly",
-};
+export const metadata = { title: "Upload | Adaptaly" };
 
 export default function UploadPage() {
   return (
-    <div className="up-page">
+    <div className="up-page" data-page="upload">
       <header className="up-header">
         <a className="up-back" href="/dashboard" aria-label="Go back to dashboard">
           <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -34,20 +29,10 @@ export default function UploadPage() {
         </a>
       </header>
 
-      <main className="up-grid">
-        <section className="up-left">
-          <Dropzone />
-        </section>
-
-        <aside className="up-right">
-          <HowItWorks />
-          <ExamplePreview />
-          <PrivacyNote />
-          <RecentUploads />
-        </aside>
+      <main className="up-main">
+        <Dropzone />
+        <InfoChips />
       </main>
-
-      {/* Sticky mobile CTA lives inside Dropzone */}
     </div>
   );
 }
