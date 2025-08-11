@@ -7,11 +7,10 @@ export type RecentDoc = {
   createdAt: string;
   totalCards: number;
   masteredCount: number;
+  dueCount: number;
 };
 
-type Props = {
-  docs: RecentDoc[];
-};
+type Props = { docs: RecentDoc[] };
 
 export default function RecentPacks({ docs }: Props) {
   if (!docs || docs.length === 0) {
@@ -34,13 +33,14 @@ export default function RecentPacks({ docs }: Props) {
     <section className="db-card">
       <div className="db-card-head">
         <h3 className="db-card-title">Recent Study Packs</h3>
-        {/* placeholder for "View all" in a later iteration */}
       </div>
       <ul className="db-doclist">
         {docs.map((d) => {
           const total = d.totalCards || 0;
           const mastered = Math.min(d.masteredCount || 0, total);
           const pct = total > 0 ? Math.round((100 * mastered) / total) : 0;
+          const actionHref = d.dueCount > 0 ? `/review?doc=${encodeURIComponent(d.id)}` : `/practice?doc=${encodeURIComponent(d.id)}&n=10`;
+          const actionLabel = d.dueCount > 0 ? `Review ${d.dueCount} due` : "Practice 10";
           return (
             <li key={d.id} className="db-doc">
               <div className="db-doc-main">
@@ -53,11 +53,11 @@ export default function RecentPacks({ docs }: Props) {
                 <div className="db-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
                   <div className="db-progress-bar" style={{ width: `${pct}%` }} />
                 </div>
-                <div className="db-progress-label">{mastered} mastered</div>
+                <div className="db-progress-label">{pct}% • {mastered} mastered</div>
               </div>
               <div className="db-doc-actions">
-                <Link className="db-btn db-btn-ghost" href={`/review?doc=${encodeURIComponent(d.id)}`}>Review</Link>
-                <Link className="db-btn db-btn-ghost" href={`/`}>Open</Link>
+                <Link className="db-btn db-btn-secondary" href={actionHref}>{actionLabel}</Link>
+                <Link className="db-btn db-btn-ghost" href={`/`}>Open summary</Link>
               </div>
             </li>
           );

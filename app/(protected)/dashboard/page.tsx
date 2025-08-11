@@ -1,29 +1,24 @@
 // app/(protected)/dashboard/page.tsx
 import "./dashboard.css";
 import Hero from "./_components/Hero";
-import StatTiles from "./_components/StatTiles";
-import Insights from "./_components/Insights";
+import GoalRing from "./_components/GoalRing";
+import StatsRow from "./_components/StatsRow";
+import FocusCard from "./_components/FocusCard";
 import RecentPacks from "./_components/RecentPacks";
-import QuickActions from "./_components/QuickActions";
-import OnboardingHint from "./_components/OnboardingHint";
+import UtilityPanel from "./_components/UtilityPanel";
+import StickyCTA from "./_components/StickyCTA";
 
 import { getDashboardSummary } from "@/src/lib/dashboard";
-import { getServerSupabaseReadOnly } from "../../../src/lib/supabaseServer"; // relative to this file
-
-import { cookies } from "next/headers";
+import { getServerSupabaseReadOnly } from "@/src/lib/supabaseServer";
 import { redirect } from "next/navigation";
 
-export const revalidate = 0; // always fresh
+export const revalidate = 0;
 
 export default async function DashboardPage() {
-  const supabase = await getServerSupabaseReadOnly(); // uses cookies internally in your helper
+  const supabase = await getServerSupabaseReadOnly();
   const { data: userRes } = await supabase.auth.getUser();
-
   const user = userRes?.user ?? null;
-  if (!user) {
-    // middleware should already protect, but double-guard
-    redirect("/signin");
-  }
+  if (!user) redirect("/signin");
 
   const name = user?.user_metadata?.full_name ?? null;
   const email = user?.email ?? null;
@@ -35,35 +30,48 @@ export default async function DashboardPage() {
     userName: name,
   });
 
+  const hasDocs = summary.recentDocs.length > 0;
+
   return (
     <main className="db-shell">
-      <Hero name={summary.greetingName} dueCount={summary.dueCount} hasDocs={summary.recentDocs.length > 0} />
+      <Hero
+        name={summary.greetingName}
+        dueCount={summary.dueCount}
+        duePacksCount={summary.duePacksCount}
+        hasDocs={hasDocs}
+      />
 
       <div className="db-grid">
         <section className="db-left">
-          <StatTiles
-            minutesToday={summary.minutesToday}
-            cardsReviewedToday={summary.cardsReviewedToday}
-            streakDays={summary.streakDays}
-          />
+          <div className="db-row">
+            <GoalRing
+              minutesToday={summary.minutesToday}
+              minutesGoal={summary.minutesGoal}
+              deltaMinutes={summary.deltaMinutesVsYesterday}
+            />
+            <StatsRow
+              streakDays={summary.streakDays}
+              bestStreak={summary.bestStreak}
+              cardsReviewedToday={summary.cardsReviewedToday}
+              deltaCardsVsYesterday={summary.deltaCardsVsYesterday}
+            />
+          </div>
 
-          <Insights
+          <FocusCard
             averageRecallPct={summary.averageRecallPct}
             weakestTopic={summary.weakestTopic}
+            strongestTopic={summary.strongestTopic}
           />
-
-          <OnboardingHint />
 
           <RecentPacks docs={summary.recentDocs} />
         </section>
 
         <aside className="db-right">
-          <div className="db-card">
-            <h3 className="db-card-title" style={{ marginBottom: 10 }}>Quick actions</h3>
-            <QuickActions />
-          </div>
+          <UtilityPanel />
         </aside>
       </div>
+
+      <StickyCTA hasDocs={hasDocs} dueCount={summary.dueCount} />
     </main>
   );
 }
