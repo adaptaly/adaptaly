@@ -1,6 +1,5 @@
 // src/lib/dashboard.ts
 // Aggregates for the v2 dashboard with fallbacks.
-// Works even if some tables or views are missing.
 
 import { startOfUtcDay, startOfDayDaysAgoUtc, iso } from "@/src/lib/date";
 
@@ -22,7 +21,7 @@ export type DashboardSummary = {
 
   // Tiles
   minutesToday: number;
-  minutesGoal: number;         // default 25
+  minutesGoal: number; // default 25
   deltaMinutesVsYesterday: number;
   cardsReviewedToday: number;
   deltaCardsVsYesterday: number;
@@ -51,10 +50,11 @@ export async function getDashboardSummary(opts: {
   const minutesGoal = 25;
 
   // Time windows (UTC-based; consistent & simple)
-  const todayStart = startOfUtcDay();
-  const yesterdayStart = startOfDayDaysAgoUtc(1);
-  const twoDaysAgoStart = startOfDayDaysAgoUtc(2);
-  const nowIso = iso(new Date());
+  const now = new Date();
+  const todayStart: Date = startOfUtcDay(now);
+  const yesterdayStart: Date = startOfDayDaysAgoUtc(1, now);
+  const twoDaysAgoStart: Date = startOfDayDaysAgoUtc(2, now);
+  const nowIso = iso(now);
 
   // ---------- Mission: total due + distinct packs with due ----------
   let dueCount = 0;
@@ -69,10 +69,12 @@ export async function getDashboardSummary(opts: {
     if (!error && Array.isArray(dueRows)) {
       dueCount = dueRows.length;
       const set = new Set<string>();
-      for (const r of dueRows) if (r.document_id) set.add(r.document_id);
+      for (const r of dueRows) if (r.document_id) set.add(r.document_id as string);
       duePacksCount = set.size;
     }
-  } catch {}
+  } catch {
+    /* ignore */
+  }
 
   // ---------- Recent documents (limit 3) with mastered + due per pack ----------
   const recentDocs: RecentDoc[] = [];
@@ -104,7 +106,9 @@ export async function getDashboardSummary(opts: {
             .eq("mastered", false)
             .lte("due_at", nowIso);
           packDue = Array.isArray(dueRows) ? dueRows.length : 0;
-        } catch {}
+        } catch {
+          /* ignore */
+        }
         recentDocs.push({
           id: d.id,
           title: d.title ?? "Untitled",
@@ -115,7 +119,9 @@ export async function getDashboardSummary(opts: {
         });
       }
     }
-  } catch {}
+  } catch {
+    /* ignore */
+  }
 
   // ---------- Reviews today / yesterday ----------
   let cardsReviewedToday = 0;
@@ -135,7 +141,9 @@ export async function getDashboardSummary(opts: {
       .gte("created_at", iso(yesterdayStart))
       .lt("created_at", iso(todayStart));
     cardsReviewedYesterday = typeof yCount === "number" ? yCount : 0;
-  } catch {}
+  } catch {
+    /* ignore */
+  }
   const deltaCardsVsYesterday = cardsReviewedToday - cardsReviewedYesterday;
 
   // ---------- Minutes today / yesterday from study_sessions (fallback 0) ----------
@@ -161,7 +169,9 @@ export async function getDashboardSummary(opts: {
       const total = sY.reduce((acc: number, r: any) => acc + (r.duration_seconds ?? 0), 0);
       minutesYesterday = Math.round(total / 60);
     }
-  } catch {}
+  } catch {
+    /* ignore */
+  }
   const deltaMinutesVsYesterday = minutesToday - minutesYesterday;
 
   // ---------- Avg recall 7d, Weakest & Strongest topics ----------
@@ -175,7 +185,9 @@ export async function getDashboardSummary(opts: {
       .eq("user_id", userId)
       .maybeSingle();
     if (rec?.recall_pct != null) averageRecallPct = Number(rec.recall_pct);
-  } catch {}
+  } catch {
+    /* ignore */
+  }
   try {
     const { data: weak } = await supabase
       .from("v_user_weak_topic_7d")
@@ -184,19 +196,22 @@ export async function getDashboardSummary(opts: {
       .order("incorrect_count", { ascending: false })
       .limit(1);
     if (Array.isArray(weak) && weak[0]?.topic) weakestTopic = weak[0].topic;
-  } catch {}
-  // Strongest = most correct in 7d (fallback compute)
+  } catch {
+    /* ignore */
+  }
+  // Strongest topic (simple heuristic: highest correct ratio in last 7 days, min 3 reviews)
   try {
     const { data: rows } = await supabase
       .from("reviews")
       .select("correct, created_at, card_id")
       .eq("user_id", userId);
     if (Array.isArray(rows) && rows.length > 0) {
-      const sevenAgo = startOfDayDaysAgoUtc(6);
-      const filtered = rows.filter((r: any) => new Date(r.created_at).getTime() >= sevenAgo.getTime());
-      // need topics
+      const sevenAgo: Date = startOfDayDaysAgoUtc(6, now);
+      const filtered = rows.filter(
+        (r: any) => new Date(r.created_at).getTime() >= sevenAgo.getTime()
+      );
       if (filtered.length > 0) {
-        const ids = filtered.map((r: any) => r.card_id).filter(Boolean);
+        const ids: string[] = filtered.map((r: any) => r.card_id).filter(Boolean);
         if (ids.length > 0) {
           const { data: cards } = await supabase
             .from("cards")
@@ -204,7 +219,8 @@ export async function getDashboardSummary(opts: {
             .in("id", ids);
           const byTopic = new Map<string, { c: number; total: number }>();
           for (const r of filtered) {
-            const t = cards?.find((c: any) => c.id === r.card_id)?.topic ?? null;
+            const t: string | null =
+              cards?.find((c: any) => c.id === r.card_id)?.topic ?? null;
             if (!t) continue;
             const m = byTopic.get(t) ?? { c: 0, total: 0 };
             m.total += 1;
@@ -226,7 +242,9 @@ export async function getDashboardSummary(opts: {
         }
       }
     }
-  } catch {}
+  } catch {
+    /* ignore */
+  }
 
   // ---------- Streak + best streak (last ~180 days) ----------
   let streakDays = 0;
@@ -236,51 +254,66 @@ export async function getDashboardSummary(opts: {
       .from("reviews")
       .select("created_at")
       .eq("user_id", userId)
-      .gte("created_at", iso(startOfDayDaysAgoUtc(180)));
+      .gte("created_at", iso(startOfDayDaysAgoUtc(180, now)));
     if (Array.isArray(data)) {
+      // Build a set of day strings YYYY-MM-DD in UTC
       const days = new Set<string>();
       for (const r of data) {
-        const d = new Date(r.created_at);
-        days.add(d.toISOString().slice(0, 10));
+        const d = new Date(r.created_at as string);
+        const dayKey = d.toISOString().slice(0, 10);
+        days.add(dayKey);
       }
-      // current streak (ending today or yesterday)
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const y = startOfDayDaysAgoUtc(1).toISOString().slice(0, 10);
-      let cursor = days.has(todayStr)
-        ? new Date()
-        : days.has(y)
-        ? new Date(startOfDayDaysAgoUtc(1))
-        : null;
-      let cur = 0;
+
+      // Current streak: walk backwards from today or yesterday
+      const todayStr: string = new Date().toISOString().slice(0, 10);
+      const yStr: string = startOfDayDaysAgoUtc(1, now).toISOString().slice(0, 10);
+
+      let cursor: Date | null = null;
+      if (days.has(todayStr)) {
+        cursor = startOfUtcDay(new Date());
+      } else if (days.has(yStr)) {
+        cursor = startOfDayDaysAgoUtc(1, new Date());
+      }
+
+      let current = 0;
       while (cursor) {
         const key = cursor.toISOString().slice(0, 10);
         if (!days.has(key)) break;
-        cur += 1;
-        cursor.setUTCDate(cursor.getUTCDate() - 1);
+        current += 1;
+        const nextCursor = new Date(cursor);
+        nextCursor.setUTCDate(nextCursor.getUTCDate() - 1);
+        cursor = nextCursor;
       }
-      streakDays = cur;
+      streakDays = current;
 
-      // best streak across window
-      // walk from oldest to newest
-      const sorted = Array.from(days).sort();
-      let prev: string | null = null;
+      // Best streak across the window
+      const sorted: string[] = Array.from(days).sort();
+      let prevStr: string | null = null;
       let run = 0;
-      bestStreak = 0;
+      let best = 0;
       for (const k of sorted) {
-        if (prev) {
-          const dPrev = new Date(prev);
-          dPrev.setUTCDate(dPrev.getUTCDate() + 1);
-          const should = dPrev.toISOString().slice(0, 10);
-          if (k === should) run += 1;
-          else run = 1;
+        if (prevStr) {
+          const prevDate: Date = new Date(prevStr + "T00:00:00Z");
+          const prevPlusOne: Date = new Date(prevDate);
+          prevPlusOne.setUTCDate(prevPlusOne.getUTCDate() + 1);
+
+          const prevPlusOneKey: string = prevPlusOne.toISOString().slice(0, 10);
+          if (k === prevPlusOneKey) {
+            run += 1;
+          } else {
+            run = 1;
+          }
         } else {
           run = 1;
         }
-        if (run > bestStreak) bestStreak = run;
-        prev = k;
+        if (run > best) best = run;
+        prevStr = k;
       }
+      bestStreak = best;
     }
-  } catch {}
+  } catch {
+    /* ignore */
+  }
 
   return {
     greetingName: userName || userEmail || null,
