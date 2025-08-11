@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 
 type Item = { id: string; title: string; meta: string; status: "ready" | "processing" | "error" };
