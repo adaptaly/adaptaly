@@ -11,17 +11,24 @@ export const metadata = {
 };
 
 export default function UploadPage() {
-  // Server component shell, all interactivity lives in child client components
   return (
     <div className="up-page">
       <header className="up-header">
-        <div>
+        <a className="up-back" href="/dashboard" aria-label="Go back to dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 19l-7-7 7-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Back
+        </a>
+
+        <div className="up-head-text">
           <h1 className="up-title">Upload a file</h1>
           <p className="up-subtitle">Turn your notes into a Study Pack in seconds</p>
         </div>
-        <a className="up-help-link" href="/help/upload" aria-label="Open upload help">
+
+        <a className="up-help" href="/help/upload" aria-label="Open upload help">
           Help
-          <svg className="up-icon-arrow" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path d="M5 12h12M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </a>
@@ -39,6 +46,8 @@ export default function UploadPage() {
           <RecentUploads />
         </aside>
       </main>
+
+      {/* Sticky mobile CTA lives inside Dropzone */}
     </div>
   );
 }
