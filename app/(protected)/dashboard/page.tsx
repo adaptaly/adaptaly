@@ -14,8 +14,11 @@ export default async function DashboardPage() {
   const user = userRes?.user ?? null;
   if (!user) redirect("/signin");
 
-  const name = user?.user_metadata?.full_name ?? null;
-  const email = user?.email ?? null;
+  const email = user.email ?? null;
+  const name =
+    (user.user_metadata?.name as string | undefined) ||
+    (user.user_metadata?.full_name as string | undefined) ||
+    null;
 
   const summary = await getDashboardSummary({
     supabase,

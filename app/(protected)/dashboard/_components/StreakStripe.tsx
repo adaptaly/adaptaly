@@ -1,16 +1,18 @@
-// app/(protected)/dashboard/_components/StreakStrip.tsx
+// app/(protected)/dashboard/_components/StreakStripe.tsx
 type Props = { streakDays: number };
 
+/**
+ * 7 cells. Rightmost is today.
+ * If streakDays >= k, the k rightmost cells are filled.
+ */
 export default function StreakStrip({ streakDays }: Props) {
-  // Show last 7 days. If streak >= i, fill the most recent squares.
-  const days = Array.from({ length: 7 }, (_, i) => i).map((i) => {
-    const filled = streakDays > 0 && i < Math.min(7, streakDays);
-    return filled;
-  });
+  const len = 7;
+  const n = Math.max(0, Math.min(len, streakDays));
+  const cells = Array.from({ length: len }, (_, i) => i >= len - n);
 
   return (
-    <div className="db-heat" aria-label="Last 7 days">
-      {days.map((on, i) => (
+    <div className="db-heat" aria-label="Last 7 days activity">
+      {cells.map((on, i) => (
         <span key={i} className={`db-heat-cell ${on ? "on" : ""}`} />
       ))}
     </div>

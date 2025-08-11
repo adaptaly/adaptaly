@@ -12,6 +12,7 @@ import StickyCTA from "./_components/StickyCTA";
 import SettingsSheet from "./_components/SettingsSheet";
 import HeroChecklist from "./_components/HeroChecklist";
 import StreakStrip from "./_components/StreakStripe";
+import CoachMarks from "./_components/CoachMarks";
 
 import type { DashboardSummary } from "@/src/lib/dashboard";
 import type { UserPrefs } from "@/src/lib/prefs";
@@ -28,11 +29,11 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
   const tip = useMemo(() => {
     if (summary.minutesToday < prefs.minutes_goal && summary.dueCount > 0) {
       const remain = Math.max(0, prefs.minutes_goal - summary.minutesToday);
-      return `You're ${remain}m from your ${prefs.minutes_goal}m goal — try a 10-card sprint.`;
+      return `You are ${remain}m from your ${prefs.minutes_goal}m goal - try a 10 card sprint.`;
     }
     if (summary.dueCount > 50) return "Big due pile? Split into 3 short sessions.";
     if (summary.streakDays === 0) return "Start small: do 10 cards to kick off your streak.";
-    return "Short 15–25 minute sessions improve retention.";
+    return "Short 15-25 minute sessions improve retention.";
   }, [summary, prefs]);
 
   const hasDocs = summary.recentDocs.length > 0;
@@ -40,13 +41,17 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
 
   return (
     <>
-      <div id="db-top-sentinel" style={{ position: "absolute", top: 0, left: 0, width: 1, height: 1 }} />
+      <div
+        id="db-top-sentinel"
+        style={{ position: "absolute", top: 0, left: 0, width: 1, height: 1 }}
+      />
 
       <Hero
         name={summary.greetingName}
         dueCount={summary.dueCount}
         duePacksCount={summary.duePacksCount}
         hasDocs={hasDocs}
+        defaultAction={prefs.default_action}
         onSettings={() => setSettingsOpen(true)}
       />
 
@@ -82,20 +87,24 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
             weakestTopic={summary.weakestTopic}
             strongestTopic={summary.strongestTopic}
           />
+        </section>
 
+        <aside className="db-right">
           <RecentPacks
             userId={userId}
             docs={summary.recentDocs}
             pinnedDocId={prefs.pinned_doc_id ?? null}
           />
-        </section>
-
-        <aside className="db-right">
           <UtilityPanel tip={tip} />
         </aside>
       </div>
 
-      <StickyCTA hasDocs={hasDocs} dueCount={summary.dueCount} sentinelId="db-top-sentinel" />
+      <StickyCTA
+        hasDocs={hasDocs}
+        dueCount={summary.dueCount}
+        sentinelId="db-top-sentinel"
+      />
+      <CoachMarks />
 
       <SettingsSheet
         open={settingsOpen}
