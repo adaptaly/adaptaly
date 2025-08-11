@@ -1,14 +1,12 @@
 // app/(protected)/dashboard/_components/Insights.tsx
 import { formatPercent } from "@/src/lib/number";
-import MicroSparkline from "./MicroSparkline";
 
 type Props = {
   averageRecallPct: number | null;
   weakestTopic: string | null;
-  trend7?: number[]; // optional trend for sparkline
 };
 
-export default function Insights({ averageRecallPct, weakestTopic, trend7 }: Props) {
+export default function Insights({ averageRecallPct, weakestTopic }: Props) {
   const recall = formatPercent(averageRecallPct);
   const weak = weakestTopic ?? "Not enough data yet";
 
@@ -18,11 +16,6 @@ export default function Insights({ averageRecallPct, weakestTopic, trend7 }: Pro
         <span className="db-chip-dot" aria-hidden />
         <span className="db-chip-label">Avg recall</span>
         <span className="db-chip-value">{recall}</span>
-        {trend7 && trend7.length > 1 ? (
-          <span className="db-chip-spark">
-            <MicroSparkline data={trend7} ariaLabel="Average recall trend" />
-          </span>
-        ) : null}
       </div>
       <div className="db-chip" role="group" aria-label="Weakest topic">
         <span className="db-chip-dot" aria-hidden />

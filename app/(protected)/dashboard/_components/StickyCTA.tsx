@@ -20,11 +20,11 @@ export default function StickyCTA({ hasDocs, dueCount, sentinelId }: Props) {
     return () => obs.disconnect();
   }, [sentinelId]);
 
-  const label = dueCount > 0 ? `Review ${dueCount} due` : hasDocs ? "Start 5-minute session" : "Upload file";
+  const label = dueCount > 0 ? `Review ${dueCount} due` : hasDocs ? "Start 5 minute session" : "Upload file";
   const href = dueCount > 0 ? "/review" : hasDocs ? "/review?quick=1" : "/?upload=1";
 
   return (
-    <div className="db-sticky-cta" style={{ opacity: visible ? 1 : 0, pointerEvents: visible ? "auto" : "none" }}>
+    <div className="db-sticky-cta" style={{ opacity: visible ? 1 : 0 }}>
       <Link className="db-btn db-btn-primary" href={href} aria-label={label}>
         {label}
         <span className="db-btn-icon" aria-hidden>

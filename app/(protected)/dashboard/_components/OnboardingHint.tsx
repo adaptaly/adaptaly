@@ -16,7 +16,11 @@ export default function OnboardingHint() {
     <div className="db-hint" role="note" aria-label="Dashboard tip">
       <span className="db-hint-dot" aria-hidden />
       Tip: Upload a file to generate your first Study Pack.
-      <button className="db-hint-dismiss" onClick={() => { localStorage.setItem(KEY, "1"); setShow(false); }} aria-label="Dismiss">
+      <button
+        className="db-hint-dismiss"
+        onClick={() => { localStorage.setItem(KEY, "1"); setShow(false); }}
+        aria-label="Dismiss tip"
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
           <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
         </svg>
