@@ -28,11 +28,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="db-shell">
-      <DashboardClient
-        userId={user.id}
-        summary={summary}
-        prefs={prefs}
-      />
+      <DashboardClient userId={user.id} summary={summary} prefs={prefs} />
     </main>
   );
 }

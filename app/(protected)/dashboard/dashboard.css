@@ -182,3 +182,14 @@
 @media (min-width:1200px){
   .db-shell{gap:18px}
 }
+/* heat strip (7-day) */
+.db-stats-wrap{display:grid;gap:10px}
+.db-heat{display:flex;gap:6px;align-items:center}
+.db-heat-cell{
+  width:12px;height:12px;border-radius:3px;
+  background:#eef2f3;border:1px solid #e5e7eb;
+}
+.db-heat-cell.on{
+  background:var(--db-accent);
+  border-color:transparent;
+}

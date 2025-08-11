@@ -11,6 +11,7 @@ import UtilityPanel from "./_components/UtilityPanel";
 import StickyCTA from "./_components/StickyCTA";
 import SettingsSheet from "./_components/SettingsSheet";
 import HeroChecklist from "./_components/HeroChecklist";
+import StreakStrip from "./_components/StreakStripe";
 
 import type { DashboardSummary } from "@/src/lib/dashboard";
 import type { UserPrefs } from "@/src/lib/prefs";
@@ -24,11 +25,9 @@ type Props = {
 export default function DashboardClient({ userId, summary, prefs }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Contextual tip
   const tip = useMemo(() => {
     if (summary.minutesToday < prefs.minutes_goal && summary.dueCount > 0) {
       const remain = Math.max(0, prefs.minutes_goal - summary.minutesToday);
-      // keep it small and actionable
       return `You're ${remain}m from your ${prefs.minutes_goal}m goal — try a 10-card sprint.`;
     }
     if (summary.dueCount > 50) return "Big due pile? Split into 3 short sessions.";
@@ -37,13 +36,10 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
   }, [summary, prefs]);
 
   const hasDocs = summary.recentDocs.length > 0;
-
-  // Use prefs.minutes_goal for the ring
   const minutesGoal = prefs.minutes_goal ?? summary.minutesGoal;
 
   return (
     <>
-      {/* sentinel so StickyCTA hides near hero */}
       <div id="db-top-sentinel" style={{ position: "absolute", top: 0, left: 0, width: 1, height: 1 }} />
 
       <Hero
@@ -54,7 +50,6 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
         onSettings={() => setSettingsOpen(true)}
       />
 
-      {/* optional tiny checklist below hero */}
       <HeroChecklist
         dueCount={summary.dueCount}
         hasDocs={hasDocs}
@@ -70,12 +65,16 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
               deltaMinutes={summary.deltaMinutesVsYesterday}
               onEditGoal={() => setSettingsOpen(true)}
             />
-            <StatsRow
-              streakDays={summary.streakDays}
-              bestStreak={summary.bestStreak}
-              cardsReviewedToday={summary.cardsReviewedToday}
-              deltaCardsVsYesterday={summary.deltaCardsVsYesterday}
-            />
+
+            <div className="db-stats-wrap">
+              <StatsRow
+                streakDays={summary.streakDays}
+                bestStreak={summary.bestStreak}
+                cardsReviewedToday={summary.cardsReviewedToday}
+                deltaCardsVsYesterday={summary.deltaCardsVsYesterday}
+              />
+              <StreakStrip streakDays={summary.streakDays} />
+            </div>
           </div>
 
           <FocusCard
@@ -84,7 +83,11 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
             strongestTopic={summary.strongestTopic}
           />
 
-          <RecentPacks docs={summary.recentDocs} />
+          <RecentPacks
+            userId={userId}
+            docs={summary.recentDocs}
+            pinnedDocId={prefs.pinned_doc_id ?? null}
+          />
         </section>
 
         <aside className="db-right">
