@@ -3,39 +3,54 @@
 import React, { useEffect, useRef, useState } from "react";
 
 /**
- * Info chips with single-open behavior.
- * - Clicking a new chip closes the previously open one
- * - Keyboard toggle works (Enter/Space on <summary>)
- * - Type-safe ref callbacks (return void)
+ * Single-open InfoChips with no flicker:
+ * - We intercept clicks on <summary> and prevent default,
+ *   then open/close via React state (no native toggle race).
+ * - Clicking outside closes all.
  */
 export default function InfoChips() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const nodesRef = useRef<Array<HTMLDetailsElement | null>>([]);
 
-  // Keep DOM <details> elements in sync with state (single open)
+  // keep DOM in sync with state
   useEffect(() => {
     nodesRef.current.forEach((el, idx) => {
       if (!el) return;
-      // Open only the current index; close all others
-      if (openIndex === idx && !el.open) el.open = true;
-      if (openIndex !== idx && el.open) el.open = false;
+      const shouldOpen = openIndex === idx;
+      if (el.open !== shouldOpen) el.open = shouldOpen;
     });
   }, [openIndex]);
 
-  // Safe ref setter that returns void (fixes TS2322)
-  const bindRef = (idx: number) => (el: HTMLDetailsElement | null): void => {
-    nodesRef.current[idx] = el;
-  };
+  // close when clicking outside
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (openIndex === null) return;
+      const target = e.target as Node;
+      const openEl = nodesRef.current[openIndex];
+      if (openEl && !openEl.contains(target)) setOpenIndex(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [openIndex]);
 
-  // When a details toggles, update state to enforce single-open rule
-  const onToggle = (idx: number) => () => {
-    setOpenIndex((curr) => (curr === idx ? null : idx));
-  };
+  const bindRef =
+    (i: number) =>
+    (el: HTMLDetailsElement | null): void => {
+      nodesRef.current[i] = el;
+    };
+
+  const onSummaryClick =
+    (i: number) =>
+    (e: React.MouseEvent<HTMLSummaryElement>): void => {
+      // stop the native <details> toggle to avoid flicker
+      e.preventDefault();
+      setOpenIndex((curr) => (curr === i ? null : i));
+    };
 
   return (
     <div className="up-info-row" aria-label="More info">
-      <details className="up-pop" ref={bindRef(0)} onToggle={onToggle(0)}>
-        <summary className="up-chip">
+      <details className="up-pop" ref={bindRef(0)}>
+        <summary className="up-chip" onClick={onSummaryClick(0)}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
             <path
               d="M4 7h16M4 12h10M4 17h16"
@@ -51,7 +66,7 @@ export default function InfoChips() {
           <p className="up-pop-title">Formats and limits</p>
           <ul className="up-pop-list">
             <li className="up-row">
-              <span className="up-dot" /> PDF, DOCX, TXT
+              <span className="up-dot" /> PDF, DOCX, TXT, MD
             </li>
             <li className="up-row">
               <span className="up-dot" /> Max 15 MB
@@ -63,8 +78,8 @@ export default function InfoChips() {
         </div>
       </details>
 
-      <details className="up-pop" ref={bindRef(1)} onToggle={onToggle(1)}>
-        <summary className="up-chip">
+      <details className="up-pop" ref={bindRef(1)}>
+        <summary className="up-chip" onClick={onSummaryClick(1)}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
             <path
               d="M12 3l8 4v5c0 5-8 9-8 9S4 17 4 12V7l8-4z"
@@ -88,8 +103,8 @@ export default function InfoChips() {
         </div>
       </details>
 
-      <details className="up-pop" ref={bindRef(2)} onToggle={onToggle(2)}>
-        <summary className="up-chip">
+      <details className="up-pop" ref={bindRef(2)}>
+        <summary className="up-chip" onClick={onSummaryClick(2)}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
             <path
               d="M8 7h12M4 12h16M8 17h12"
@@ -117,11 +132,23 @@ export default function InfoChips() {
         </div>
       </details>
 
-      <details className="up-pop" ref={bindRef(3)} onToggle={onToggle(3)}>
-        <summary className="up-chip">
+      <details className="up-pop" ref={bindRef(3)}>
+        <summary className="up-chip" onClick={onSummaryClick(3)}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M8 12h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <circle
+              cx="12"
+              cy="12"
+              r="9"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+            <path
+              d="M8 12h8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
           </svg>
           How it works
         </summary>
