@@ -1,59 +1,30 @@
-// New
+// Update
 // src/lib/extractors/docx.ts
-import { extractRawText } from "./docx_internal";
+import JSZip from "jszip";
 
 /**
- * Extract plain text from DOCX.
- * Uses a small internal implementation to avoid heavy dependencies in the route.
+ * Extract plain text from a .docx buffer.
+ * Lightweight approach: read word/document.xml (and header/footer if present),
+ * collect <w:t> nodes, and join paragraphs with newlines.
  */
 export async function extractDocx(buffer: Buffer): Promise<string> {
   return extractRawText(buffer);
 }
 
-/* ===== Minimal DOCX -> text reader using JSZip + XML parsing ===== */
-import JSZip from "jszip";
+/* ===== Minimal DOCX -> text reader using JSZip + simple XML parsing ===== */
 
-// Naive paragraph joiner for word/document.xml
-function xmlToText(xml: string): string {
-  // Replace common Word tags with newlines or spacing
-  // - paragraphs: w:p
-  // - text runs: w:t
-  // - line breaks: w:br
-  // Very lightweight approach, good enough for study notes.
-  const paraSplit = xml.split("<w:p");
-  const parts: string[] = [];
-  for (let i = 0; i < paraSplit.length; i++) {
-    const seg = paraSplit[i];
-    if (!seg) continue;
-    const closeIdx = seg.indexOf("</w:p>");
-    if (closeIdx === -1) continue;
-    const paraXml = seg.slice(0, closeIdx);
-    // collect text nodes
-    const texts = Array.from(paraXml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)).map((m) => decodeXml(m[1]));
-    parts.push(texts.join(""));
-  }
-  return parts.join("\n");
-}
-
-function decodeXml(s: string): string {
-  return s
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'");
-}
-
-export async function extractRawText(buffer: Buffer): Promise<string> {
+async function extractRawText(buffer: Buffer): Promise<string> {
   const zip = await JSZip.loadAsync(buffer);
+
   const docXml = await zip.file("word/document.xml")?.async("string");
   if (!docXml) {
-    throw new Error("Unsupported DOCX structure - no document.xml");
+    throw new Error("Unsupported DOCX structure - missing word/document.xml");
   }
-  // Core text
+
+  // Core document text
   let text = xmlToText(docXml);
 
-  // Optionally append headers and footers if present
+  // Optionally merge headers and footers if present
   const headerFiles = Object.keys(zip.files).filter((k) => /^word\/header\d+\.xml$/.test(k));
   const footerFiles = Object.keys(zip.files).filter((k) => /^word\/footer\d+\.xml$/.test(k));
 
@@ -67,4 +38,45 @@ export async function extractRawText(buffer: Buffer): Promise<string> {
   }
 
   return text;
+}
+
+// Convert a subset of WordprocessingML to plain text.
+// - paragraphs: <w:p> ... </w:p>
+// - text runs: <w:t> ... </w:t>
+// - line breaks: <w:br/>
+function xmlToText(xml: string): string {
+  // Split on paragraph open tags to keep paragraph boundaries
+  const paraSplit = xml.split("<w:p");
+  const parts: string[] = [];
+
+  for (let i = 0; i < paraSplit.length; i++) {
+    const seg = paraSplit[i];
+    if (!seg) continue;
+
+    const closeIdx = seg.indexOf("</w:p>");
+    if (closeIdx === -1) continue;
+
+    const paraXml = seg.slice(0, closeIdx);
+
+    // Replace explicit line breaks with newline placeholders to keep structure
+    const withBreaks = paraXml.replace(/<w:br\s*\/>/g, "\n");
+
+    // Collect all text nodes inside this paragraph
+    const texts = Array.from(withBreaks.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g)).map((m) => decodeXml(m[1]));
+
+    // Join runs into one paragraph line
+    parts.push(texts.join(""));
+  }
+
+  // Join paragraphs with a newline, then collapse multiple blank lines
+  return parts.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+function decodeXml(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
 }
