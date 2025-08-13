@@ -13,7 +13,7 @@ export default function InfoChips() {
         <div className="up-pop-panel">
           <p className="up-pop-title">Formats and limits</p>
           <ul className="up-pop-list">
-            <li className="up-row"><span className="up-dot" /> PDF, DOCX, TXT, MD</li>
+            <li className="up-row"><span className="up-dot" /> PDF, DOCX, TXT</li>
             <li className="up-row"><span className="up-dot" /> Max 15 MB</li>
             <li className="up-row"><span className="up-dot" /> Up to 60 pages</li>
           </ul>

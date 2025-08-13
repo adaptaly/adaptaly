@@ -11,23 +11,17 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(marketing)/page.js"
     ],
+    "/(protected)/upload/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/(protected)/upload/page.css",
+      "static/chunks/app/(protected)/upload/page.js"
+    ],
     "/(protected)/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/css/app/(protected)/dashboard/page.css",
       "static/chunks/app/(protected)/dashboard/page.js"
-    ],
-    "/(auth)/signup/layout": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/css/app/(auth)/signup/layout.css",
-      "static/chunks/app/(auth)/signup/layout.js"
-    ],
-    "/(auth)/signup/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/css/app/(auth)/signup/page.css",
-      "static/chunks/app/(auth)/signup/page.js"
     ]
   }
 }
