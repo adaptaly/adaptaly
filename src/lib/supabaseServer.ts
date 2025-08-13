@@ -1,46 +1,34 @@
+// Update
 // src/lib/supabaseServer.ts
+import { createServerClient as createSupabaseServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /**
- * Read-only Supabase client for Server Components.
- * Uses getAll()/setAll() shape per @supabase/ssr typings.
- * setAll is a NO-OP here to avoid cookie writes during render.
+ * Server-side Supabase client for App Router route handlers and server components.
+ * In your setup, cookies() is async, so we await it here.
  */
-export async function getServerSupabaseReadOnly(): Promise<SupabaseClient> {
-  const cookieStore = await cookies(); // Next 15: async
-  return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
+export async function createServerClient() {
+  const cookieStore = await cookies(); // <- fixes "Property 'get' does not exist on type 'Promise<...>'"
+
+  const supabase = createSupabaseServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set({ name, value: "", ...options, maxAge: 0 });
+        },
       },
-      setAll(_cookies) {
-        // NO-OP in RSC render path
-      },
-    },
-  });
+    }
+  );
+
+  return supabase;
 }
 
-/**
- * Writable Supabase client for Route Handlers / Server Actions.
- * Use this when you DO want to mutate auth cookies (e.g., signout).
- */
-export async function getServerSupabaseWritable(): Promise<SupabaseClient> {
-  const cookieStore = await cookies(); // Next 15: async
-  return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
-        });
-      },
-    },
-  });
-}
+export default createServerClient;

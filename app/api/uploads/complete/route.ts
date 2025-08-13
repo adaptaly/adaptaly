@@ -1,7 +1,7 @@
 // Update
 // app/api/uploads/complete/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/src/lib/supabaseServer"; // already provided by you
+import { createServerClient } from "@/src/lib/supabaseServer";
 import { extractPdf } from "@/src/lib/extractors/pdf";
 import { extractDocx } from "@/src/lib/extractors/docx";
 import { cleanText } from "@/src/lib/cleanText";
@@ -23,25 +23,22 @@ const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
 const MAX_PAGES = 60;
 
 export async function POST(req: NextRequest) {
-  const supabase = createServerClient();
+  // cookies() is async in your env, so our helper is async too.
+  const supabase = await createServerClient();
 
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as any));
     const docId: string | undefined =
-      body?.docId ??
-      new URL(req.url).searchParams.get("id") ??
-      undefined;
+      body?.docId ?? new URL(req.url).searchParams.get("id") ?? undefined;
 
     if (!docId) {
       return NextResponse.json({ ok: false, error: "Missing docId." }, { status: 400 });
     }
 
     // Load document row to find storage target
-    const { data: doc, error: docErr } = await supabase
-      .from("documents")
-      .select("*")
-      .eq("id", docId)
-      .single<DocRow>();
+    const res = await supabase.from("documents").select("*").eq("id", docId).single();
+    const doc = res.data as DocRow | null;
+    const docErr = res.error;
 
     if (docErr || !doc) {
       return NextResponse.json({ ok: false, error: "Document not found." }, { status: 404 });
@@ -57,7 +54,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "File exceeds 15 MB limit." }, { status: 413 });
     }
 
-    // Pull bytes from Supabase Storage
+    // Download bytes from Supabase Storage
     const dl = await supabase.storage.from(doc.bucket).download(doc.object_path);
     if (dl.error || !dl.data) {
       await markError(supabase, docId, "Could not read uploaded file.");
@@ -66,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     const buf = Buffer.from(await dl.data.arrayBuffer());
 
-    // Determine type from extension or mime
+    // Determine type
     const lower = doc.object_path.toLowerCase();
     const ext = lower.split(".").pop() || "";
     const mime = (doc.mime_type || "").toLowerCase();
@@ -74,13 +71,11 @@ export async function POST(req: NextRequest) {
     let rawText = "";
     let pageCount: number | null = null;
 
-    // Extract text
     if (ext === "pdf" || mime.includes("pdf")) {
       const { text, pages } = await extractPdf(buf);
       rawText = text;
       pageCount = pages;
 
-      // Enforce page count for PDFs using true page count
       if (typeof pageCount === "number" && pageCount > MAX_PAGES) {
         await markError(supabase, docId, `PDF has ${pageCount} pages. Limit is ${MAX_PAGES}.`);
         return NextResponse.json(
@@ -92,22 +87,23 @@ export async function POST(req: NextRequest) {
       const text = await extractDocx(buf);
       rawText = text;
 
-      // Estimate pages for DOCX - friendly heuristic
-      pageCount = estimatePages(rawText);
-      if (pageCount > MAX_PAGES) {
-        await markError(supabase, docId, `Document is about ${pageCount} pages. Limit is ${MAX_PAGES}.`);
+      const est = estimatePages(rawText);
+      pageCount = est;
+      if (est > MAX_PAGES) {
+        await markError(supabase, docId, `Document is about ${est} pages. Limit is ${MAX_PAGES}.`);
         return NextResponse.json(
-          { ok: false, error: `Document is about ${pageCount} pages. Limit is ${MAX_PAGES}.` },
+          { ok: false, error: `Document is about ${est} pages. Limit is ${MAX_PAGES}.` },
           { status: 422 }
         );
       }
     } else if (ext === "txt" || mime.includes("text/plain")) {
       rawText = buf.toString("utf8");
-      pageCount = estimatePages(rawText);
-      if (pageCount > MAX_PAGES) {
-        await markError(supabase, docId, `Text is about ${pageCount} pages. Limit is ${MAX_PAGES}.`);
+      const est = estimatePages(rawText);
+      pageCount = est;
+      if (est > MAX_PAGES) {
+        await markError(supabase, docId, `Text is about ${est} pages. Limit is ${MAX_PAGES}.`);
         return NextResponse.json(
-          { ok: false, error: `Text is about ${pageCount} pages. Limit is ${MAX_PAGES}.` },
+          { ok: false, error: `Text is about ${est} pages. Limit is ${MAX_PAGES}.` },
           { status: 422 }
         );
       }
@@ -120,9 +116,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Clean the text
-    const cleaned = cleanText(rawText, { maxLength: 1_000_000 }); // guardrails
+    const cleaned = cleanText(rawText, { maxLength: 1_000_000 });
 
-    // Persist cleaned text and page count - mark status "cleaned" for Step 2
+    // Save result — Step 2 ends at "cleaned"
     const { error: upErr } = await supabase
       .from("documents")
       .update({
@@ -138,17 +134,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Failed to save cleaned text." }, { status: 500 });
     }
 
-    // Respond success
     return NextResponse.json({ ok: true, id: docId, status: "cleaned", pageCount });
   } catch (err: any) {
-    // Handle common encrypted/corrupted cases with a friendly message
     const msg = toFriendlyError(err?.message || String(err));
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
 
 function estimatePages(text: string): number {
-  // Roughly 1800 chars per page as a conservative average for study notes
   const chars = (text || "").trim().length;
   if (!chars) return 0;
   return Math.max(1, Math.ceil(chars / 1800));
