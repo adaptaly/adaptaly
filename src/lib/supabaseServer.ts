@@ -1,16 +1,24 @@
 // Update
 // src/lib/supabaseServer.ts
-import { createServerClient as createSupabaseServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient as createSSRClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 /**
- * Server-side Supabase client for App Router route handlers and server components.
- * In your setup, cookies() is async, so we await it here.
+ * Some Next.js setups expose cookies() sync, others as a Promise.
+ * This helper normalizes it to an awaited store.
  */
-export async function createServerClient() {
-  const cookieStore = await cookies(); // <- fixes "Property 'get' does not exist on type 'Promise<...>'"
+async function getCookieStore() {
+  const store = cookies() as any;
+  return typeof store?.then === "function" ? await store : store;
+}
 
-  const supabase = createSupabaseServerClient(
+/**
+ * Core factory used by all helpers.
+ */
+async function makeClient() {
+  const cookieStore = await getCookieStore();
+
+  const supabase = createSSRClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL as string,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
     {
@@ -31,4 +39,24 @@ export async function createServerClient() {
   return supabase;
 }
 
+/**
+ * Primary helper used in most server handlers.
+ */
+export async function createServerClient() {
+  return makeClient();
+}
+
+/**
+ * Backwards‑compat aliases to satisfy existing imports in your codebase.
+ * Both use the anon key and cookie persistence.
+ */
+export async function getServerSupabaseReadOnly() {
+  return makeClient();
+}
+
+export async function getServerSupabaseWritable() {
+  return makeClient();
+}
+
+// Default export for compatibility with places using `default import`.
 export default createServerClient;
