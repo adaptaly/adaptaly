@@ -1,5 +1,4 @@
-/* Upload Page - 100/10 design, above-the-fold, no scrolling */
-/* Color + tokens harmonized with your dashboard style */
+/* Upload Page - responsive, expands with content; keeps brand styling */
 
 :root{
   --up-bg: var(--db-bg, #F6F6F7);
@@ -18,18 +17,17 @@
   --up-radius: 12px;
   --up-shadow: 0 10px 30px rgba(0,0,0,.06), 0 2px 10px rgba(0,0,0,.04);
 
-  /* Fixed heights so card can flip states without layout jump */
-  --up-dz-height-desktop: 340px;
-  --up-dz-height-mobile: 360px;
+  /* Min heights to keep structure, but allow expansion */
+  --up-dz-minh-desktop: 340px;
+  --up-dz-minh-mobile: 360px;
 
-  /* Layout paddings */
   --up-pad-desktop: 24px;
   --up-pad-mobile: 16px;
 }
 
-/* Page shell: one screen, no scroll */
+/* Page shell: allow vertical scroll if contents expand (errors, popovers, etc.) */
 .up-page[data-page="upload"]{
-  height: 100dvh; /* lock to viewport height */
+  min-height: 100dvh;
   background: var(--up-bg);
   color: var(--up-fg);
   display: grid;
@@ -37,7 +35,7 @@
   padding: calc(env(safe-area-inset-top) + var(--up-pad-mobile))
            var(--up-pad-mobile)
            calc(env(safe-area-inset-bottom) + var(--up-pad-mobile));
-  overflow: hidden; /* ensure no page scroll */
+  overflow: auto; /* was hidden; now page grows when content grows */
 }
 @media (min-width: 768px){
   .up-page[data-page="upload"]{
@@ -45,7 +43,7 @@
   }
 }
 
-/* Header: 3-zone baseline row */
+/* Header */
 .up-header{
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -68,17 +66,17 @@
 .up-help:hover{background:#EEF7F6}
 .up-back:focus-visible,.up-help:focus-visible{outline:0;box-shadow:0 0 0 3px var(--up-ring)}
 
-/* Main region: centered column, no scroll */
+/* Main: allow content to expand; center on wide screens while not clipping */
 .up-main{
-  display: grid;
-  justify-items: center;
-  align-content: center; /* keep vertically centered */
-  gap: 14px;
-  height: 100%;
-  overflow: hidden; /* inner scrolling not allowed */
+  display:grid;
+  justify-items:center;
+  align-content:start; /* was center; start prevents clipping when card grows */
+  gap:14px;
+  min-height: 0;
+  overflow: visible; /* was hidden; ensures outer card grows with inner content */
 }
 
-/* Card shell with accent border */
+/* Card shell */
 .up-card{
   background: var(--up-card);
   border-radius: var(--up-radius-lg);
@@ -86,24 +84,25 @@
   box-shadow: var(--up-shadow);
 }
 
-/* === Dropzone fixed-height card ======================================= */
+/* === Dropzone card ======================================= */
 .up-dz{
-  width: 100%; /* full width */
-  max-width: 940px; /* prevent overstretch on ultrawide */
-  height: var(--up-dz-height-desktop);
+  width: min(940px, 100%);
+  min-height: var(--up-dz-minh-desktop); /* was fixed height; now min-height */
   padding: clamp(18px, 3.6vw, 28px);
   position: relative;
   display: grid;
   place-items: center;
 }
 @media (max-width: 640px){
-  .up-dz{ height: var(--up-dz-height-mobile); }
+  .up-dz{ min-height: var(--up-dz-minh-mobile); }
 }
 
-/* Inner dashed container */
+/* Dashed inner */
 .up-dz-inner{
   width: 100%;
-  height: 100%;
+  max-width: 820px;
+  /* Remove forced height so it expands with errors or extra content */
+  /* height: 100%; */ 
   border: 1.5px dashed rgba(3,105,98,.26);
   border-radius: calc(var(--up-radius-lg) - 6px);
   background: linear-gradient(180deg, #fff, #fbfefd);
@@ -121,20 +120,18 @@
   box-shadow: 0 0 0 3px var(--up-accent-soft), var(--up-shadow);
 }
 
-/* Idle state content */
+/* Idle */
 .up-dz-idle{
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 10px;
+  display:grid;
+  align-content:center;
+  justify-items:center;
+  gap:10px;
 }
-.up-icon{
-  width: 64px; height: 64px; opacity: .95;
-}
-.up-h1{margin:0;font-size:clamp(18px,2vw,22px);font-weight:800;letter-spacing:-.01em}
-.up-h2{margin:0;color:var(--up-muted);font-size:13.5px}
+.up-icon{ width:64px; height:64px; opacity:.95; }
+.up-h1{ margin:0; font-size:clamp(18px,2vw,22px); font-weight:800; letter-spacing:-.01em }
+.up-h2{ margin:0; color:var(--up-muted); font-size:13.5px }
 
-.up-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.up-actions{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center }
 .up-btn{
   appearance:none;border:1px solid transparent;background:transparent;color:var(--up-fg);
   padding:10px 12px;border-radius:12px;font-size:14px;line-height:1;cursor:pointer;
@@ -149,7 +146,7 @@
 
 .up-formats{margin:0;color:var(--up-muted);font-size:12.5px}
 
-/* Progress state occupies the same height as idle */
+/* Progress overlay: stays positioned but parent can grow as needed */
 .up-dz-progress{
   position:absolute; inset: clamp(16px, 2.6vw, 24px);
   display:grid; grid-template-rows:auto 1fr auto; gap:12px;
@@ -168,13 +165,13 @@
 .up-bar-wrap{height:8px;border-radius:999px;background:#EEF2F3;border:1px solid #e5e7eb;overflow:hidden}
 .up-bar{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,var(--up-accent),#8fe1d8);transition:width .28s ease}
 
-/* Success strip stays inside, bottom aligned */
+/* Success strip */
 .up-success{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px;border-radius:10px;border:1px solid rgba(34,197,94,.28);background:#f3fff8;
 }
 
-/* Info chips row (popover triggers) */
+/* Info chips */
 .up-info-row{
   position: relative;
   width: min(940px, 100%);
@@ -185,7 +182,7 @@
 }
 .up-chip svg{opacity:.8}
 
-/* Popover (details/summary) positioned overlay that does not change layout height */
+/* Popover panels (overlays) */
 .up-pop{position:relative}
 .up-pop > summary{list-style:none;cursor:pointer}
 .up-pop > summary::-webkit-details-marker{display:none}
@@ -210,10 +207,8 @@
   position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
 }
 
-/* Mobile sticky CTA inside Dropzone component */
-.up-sticky{
-  display:none;
-}
+/* Mobile sticky CTA */
+.up-sticky{ display:none; }
 @media (max-width:640px){
   .up-sticky{
     display:grid; position:fixed; left:0; right:0; bottom:0; z-index:10;
