@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabaseBrowser } from '@/lib/supabaseClient';
-import { validatePassword, calcStrength } from '@/lib/password';
+import { supabaseBrowser } from '@/src/lib/supabaseClient';
+import { validatePassword, calcStrength } from '@/src/lib/password';
 import './confirm.css';
 
 function parseHash(): Record<string, string> {

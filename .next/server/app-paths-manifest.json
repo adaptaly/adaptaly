@@ -1,3 +1,5 @@
 {
-  "/(protected)/upload/page": "app/(protected)/upload/page.js"
+  "/(auth)/signin/page": "app/(auth)/signin/page.js",
+  "/(protected)/upload/page": "app/(protected)/upload/page.js",
+  "/(auth)/signup/page": "app/(auth)/signup/page.js"
 }

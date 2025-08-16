@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseBrowser } from '@/lib/supabaseClient';
+import { supabaseBrowser } from '@/src/lib/supabaseClient';
 import './signup.css';
 
 // Canonical base URL: prefer env, fallback to window.origin

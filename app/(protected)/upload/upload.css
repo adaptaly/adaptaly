@@ -97,7 +97,7 @@
 /* Inner dashed container */
 .up-dz-inner{
   width: 100%;
-  max-width: 820px;
+  max-width: 900px;
   /* allow growth instead of fixed */
   min-height: 100%;
   height: auto;
@@ -162,6 +162,30 @@
 .up-success{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px;border-radius:10px;border:1px solid rgba(34,197,94,.28);background:#f3fff8;
+}
+
+.up-error{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px;border-radius:10px;border:1px solid rgba(239,68,68,.28);background:#fef2f2;
+}
+
+/* Message states */
+.message{
+  margin-top:12px;padding:8px 12px;border-radius:8px;font-size:13px;
+}
+.error-message{
+  background:#fef2f2;color:#dc2626;border:1px solid rgba(239,68,68,.28);
+}
+.success-message{
+  background:#f3fff8;color:#059669;border:1px solid rgba(34,197,94,.28);
+}
+.warning-message{
+  background:#fffbeb;color:#d97706;border:1px solid rgba(245,158,11,.28);
+}
+
+/* Disabled button states */
+.up-btn:disabled{
+  opacity:0.6;cursor:not-allowed;
 }
 
 /* Info chips row and popovers (unchanged styles) */

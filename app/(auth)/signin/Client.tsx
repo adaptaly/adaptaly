@@ -4,7 +4,7 @@
 import './signin.css';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabaseBrowser, supabaseForAuth } from '@/lib/supabaseClient';
+import { supabaseBrowser, supabaseForAuth } from '@/src/lib/supabaseClient';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 

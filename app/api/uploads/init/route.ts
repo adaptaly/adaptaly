@@ -1,89 +1,101 @@
-import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
-import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
-
+// app/api/uploads/init/route.ts
+import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
-type Body = { filename: string; size: number; mime: string };
+// Keep using your server Supabase helper (awaitable)
+import { createServerClient } from "@/src/lib/supabaseServer";
 
-export async function POST(req: Request) {
+type Body = {
+  filename?: string;
+  size?: number;
+  mime?: string;
+};
+
+function isSupportedMime(m: string | undefined | null) {
+  return (
+    m === "application/pdf" ||
+    m === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    m === "text/plain"
+  );
+}
+function isMarkdownMime(m: string | undefined | null) {
+  return m === "text/markdown";
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as Body;
-    const { filename, size, mime } = body || {};
+    const { filename, size, mime } = (await req.json()) as Body;
 
-    if (!filename || typeof filename !== "string") {
-      return NextResponse.json({ ok: false, error: "Missing filename" }, { status: 400 });
-    }
-    if (!Number.isFinite(size) || size <= 0) {
-      return NextResponse.json({ ok: false, error: "Invalid size" }, { status: 400 });
-    }
-    if (!mime || typeof mime !== "string") {
-      return NextResponse.json({ ok: false, error: "Missing mime" }, { status: 400 });
-    }
-    // Basic client-sent validation hardening
-    const extOk = /\.(pdf|docx|txt)$/i.test(filename);
-    if (!extOk) {
-      return NextResponse.json({ ok: false, error: "Only PDF, DOCX, TXT are supported" }, { status: 400 });
+    if (!filename || typeof filename !== "string" || !mime || typeof mime !== "string") {
+      return NextResponse.json({ ok: false, error: "filename and mime are required" }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined;
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 500 });
+    // Client guard parity (server-side)
+    if (isMarkdownMime(mime) || !isSupportedMime(mime)) {
+      return NextResponse.json(
+        { ok: false, error: "Unsupported file type. Upload PDF, DOCX, or TXT." },
+        { status: 400 }
+      );
+    }
+    if (typeof size === "number" && size > 15 * 1024 * 1024) {
+      return NextResponse.json(
+        { ok: false, error: "File exceeds 15 MB limit." },
+        { status: 400 }
+      );
     }
 
-    // Next.js 15: cookies() is async
-    const cookieStore = await cookies();
-    const accessToken = cookieStore.get("sb-access-token")?.value;
-    if (!accessToken) {
+    const supabase = await createServerClient();
+
+    // Get the current user (RLS relies on this)
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userData?.user) {
       return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
     }
+    const userId = userData.user.id;
 
-    const admin = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
-
-    const { data: userInfo, error: userErr } = await admin.auth.getUser(accessToken);
-    if (userErr || !userInfo?.user) {
-      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-    }
-    const userId = userInfo.user.id;
-
-    const safeName = filename.replace(/[^\w.\-]+/g, "_").slice(0, 120);
-    const documentId = randomUUID();
-    const objectPath = `${userId}/${documentId}/${safeName}`;
-
-    // Create documents row
-    const { error: insertErr } = await admin
+    // Create documents row in "uploading" state
+    const insertRes = await supabase
       .from("documents")
       .insert({
-        id: documentId,
         user_id: userId,
-        filename: safeName,
+        filename,
         mime,
-        size_bytes: size,
+        size_bytes: size ?? null,
         status: "uploading",
-      } as any);
-    if (insertErr) {
+        error_message: null,
+      })
+      .select("id")
+      .single();
+
+    if (insertRes.error || !insertRes.data) {
       return NextResponse.json({ ok: false, error: "Failed to create document" }, { status: 500 });
     }
 
-    // Create signed upload URL (Supabase Storage)
-    const { data: signed, error: signErr } = await admin.storage
-      .from("uploads")
-      .createSignedUploadUrl(objectPath, { upsert: false });
+    const documentId = insertRes.data.id as string;
 
-    if (signErr || !signed?.signedUrl) {
-      return NextResponse.json({ ok: false, error: "Could not create upload URL" }, { status: 500 });
+    // Shape the Storage path so it satisfies your RLS:
+    // uploads/<uid>/<documentId>/<original filename>
+    const bucket = "uploads";
+    const storagePath = `${userId}/${documentId}/${filename}`;
+
+    // Persist the path for later (used by /complete)
+    const upd = await supabase
+      .from("documents")
+      .update({ storage_path: storagePath, storage_bucket: bucket })
+      .eq("id", documentId);
+
+    if (upd.error) {
+      return NextResponse.json({ ok: false, error: "Failed to persist storage path" }, { status: 500 });
     }
 
     return NextResponse.json({
       ok: true,
       documentId,
-      path: objectPath,
-      uploadUrl: signed.signedUrl,
+      bucket,
+      path: storagePath,
     });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unexpected error" }, { status: 500 });
+  } catch (e) {
+    console.error("uploads/init error", e);
+    return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
   }
 }

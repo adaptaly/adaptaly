@@ -1,6 +1,6 @@
 // app/api/signout/route.ts
 import { NextResponse } from "next/server";
-import { getServerSupabaseWritable } from "@/lib/supabaseServer";
+import { getServerSupabaseWritable } from "@/src/lib/supabaseServer";
 
 export const runtime = "nodejs";
 

@@ -15,10 +15,10 @@
     "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
-      "@/lib/*": ["src/lib/*"],
+      "@/lib/*": ["lib/*"],
+      "@/lib": ["lib"],
       "@/app/*": ["app/*"],
       "@/public/*": ["public/*"],
-      "@/src/*": ["src/*"],
       "@/*": ["*"]
     },
     "typeRoots": ["./src/types", "./node_modules/@types"],

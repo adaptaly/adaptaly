@@ -1,53 +1,206 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
+export const runtime = "nodejs";
 
-/**
- * Step 1: COMPLETE upload
- * For now, simply marks the document as "ready".
- * Later steps will trigger parsing and AI pipeline here.
- */
+import { extractPdf } from "@/src/lib/extractors/pdf";
+import { extractDocx } from "@/src/lib/extractors/docx";
+import { cleanText } from "@/src/lib/cleanText";
 
-type Body = { documentId: string };
+// Your Supabase helper is here in your repo
+import { createServerClient } from "@/src/lib/supabaseServer";
 
-export async function POST(req: Request) {
+type DocRow = {
+  id: string;
+  user_id: string | null;
+  filename: string | null;
+  mime: string | null;
+  size_bytes: number | null;
+  status: "uploading" | "processing" | "ready" | "error";
+  error_message: string | null;
+  page_count: number | null;
+  storage_path: string | null;
+  storage_bucket?: string | null;
+};
+
+function isSupportedMime(m: string | null): boolean {
+  if (!m) return false;
+  if (m === "application/pdf") return true;
+  if (m === "text/plain") return true;
+  if (m === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return true;
+  return false;
+}
+
+function isMarkdownMime(m: string | null): boolean {
+  if (!m) return false;
+  return m.includes("markdown") || m === "text/markdown";
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const { documentId } = (await req.json()) as Body;
-    if (!documentId) {
+    const { documentId } = (await req.json()) as { documentId?: string };
+
+    if (!documentId || typeof documentId !== "string") {
       return NextResponse.json({ ok: false, error: "Missing documentId" }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json({ ok: false, error: "Server misconfigured" }, { status: 500 });
-    }
+    // FIX: await the async client factory
+    const supabase = await createServerClient();
 
-    const cookieStore = await cookies();
-    const accessToken = cookieStore.get("sb-access-token")?.value;
-    if (!accessToken) {
-      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-    }
-
-    const admin = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
-    const { data: userInfo, error: userErr } = await admin.auth.getUser(accessToken);
-    if (userErr || !userInfo.user) {
-      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-    }
-    const userId = userInfo.user.id;
-
-    const { error: updateErr } = await admin
+    // 1) Load the document row
+    const { data: doc, error: docErr } = await supabase
       .from("documents")
-      .update({ status: "ready" })
+      .select(
+        "id,user_id,filename,mime,size_bytes,status,error_message,page_count,storage_path,storage_bucket"
+      )
       .eq("id", documentId)
-      .eq("user_id", userId);
+      .single<DocRow>();
 
-    if (updateErr) {
-      return NextResponse.json({ ok: false, error: "Could not complete upload" }, { status: 500 });
+    if (docErr || !doc) {
+      return NextResponse.json({ ok: false, error: "Document not found" }, { status: 404 });
     }
+
+    // 2) Mark processing
+    await supabase
+      .from("documents")
+      .update({ status: "processing", error_message: null })
+      .eq("id", documentId);
+
+    // 3) Validate MIME on server
+    if (isMarkdownMime(doc.mime) || !isSupportedMime(doc.mime)) {
+      await supabase
+        .from("documents")
+        .update({
+          status: "error",
+          error_message:
+            "Unsupported file type. Please upload PDF, DOCX, or TXT. Markdown is not supported."
+        })
+        .eq("id", documentId);
+      return NextResponse.json({ ok: false, error: "Unsupported file type" }, { status: 400 });
+    }
+
+    // 4) Resolve storage bucket and path
+    const bucket = doc.storage_bucket || "uploads";
+    const storagePath = doc.storage_path;
+    if (!storagePath) {
+      await supabase
+        .from("documents")
+        .update({
+          status: "error",
+          error_message:
+            "The uploaded file path could not be found. Please re-upload your file."
+        })
+        .eq("id", documentId);
+      return NextResponse.json({ ok: false, error: "Missing storage path" }, { status: 400 });
+    }
+
+    // 5) Download original file bytes
+    const downloadRes = await supabase.storage.from(bucket).download(storagePath);
+    if (downloadRes.error) {
+      await supabase
+        .from("documents")
+        .update({
+          status: "error",
+          error_message:
+            "We could not access the uploaded file. Please try uploading again."
+        })
+        .eq("id", documentId);
+      return NextResponse.json({ ok: false, error: "Download failed" }, { status: 500 });
+    }
+
+    const arrayBuffer = await downloadRes.data.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 6) Extract text
+    let rawText = "";
+    let pageCount: number | null = null;
+
+    if (doc.mime === "application/pdf") {
+      const pdf = await extractPdf(buffer);
+      rawText = pdf.text;
+      pageCount = typeof pdf.pageCount === "number" ? pdf.pageCount : 0;
+
+      // Enforce the 60-page cap after parsing
+      if (pageCount !== null && pageCount > 60) {
+        await supabase
+          .from("documents")
+          .update({
+            status: "error",
+            page_count: pageCount,
+            error_message:
+              "Your PDF has more than 60 pages after parsing. Please upload a shorter PDF or split it."
+          })
+          .eq("id", documentId);
+        return NextResponse.json({ ok: false, error: "PDF exceeds 60 pages" }, { status: 400 });
+      }
+    } else if (doc.mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      const docx = await extractDocx(buffer);
+      rawText = docx.text;
+    } else if (doc.mime === "text/plain") {
+      rawText = buffer.toString("utf-8");
+    } else {
+      await supabase
+        .from("documents")
+        .update({
+          status: "error",
+          error_message: "Unsupported file type. Please upload PDF, DOCX, or TXT."
+        })
+        .eq("id", documentId);
+      return NextResponse.json({ ok: false, error: "Unsupported type" }, { status: 400 });
+    }
+
+    if (!rawText || rawText.trim().length === 0) {
+      await supabase
+        .from("documents")
+        .update({
+          status: "error",
+          error_message:
+            "We could not extract text from this file. If it is a scanned PDF, try exporting a text-based PDF."
+        })
+        .eq("id", documentId);
+      return NextResponse.json({ ok: false, error: "No text extracted" }, { status: 422 });
+    }
+
+    // 7) Clean text
+    const cleaned = cleanText(rawText);
+
+    // 8) Persist: update page_count if available
+    await supabase
+      .from("documents")
+      .update({
+        page_count: pageCount
+      })
+      .eq("id", documentId);
+
+    // 9) Store cleaned text alongside the original, as clean.txt in the same folder
+    const lastSlash = storagePath.lastIndexOf("/");
+    const baseDir = lastSlash >= 0 ? storagePath.slice(0, lastSlash) : "";
+    const cleanPath = baseDir ? `${baseDir}/clean.txt` : `${documentId}/clean.txt`;
+
+    const uploadClean = await supabase.storage.from(bucket).upload(cleanPath, cleaned, {
+      contentType: "text/plain; charset=utf-8",
+      upsert: true
+    });
+
+    if (uploadClean.error) {
+      await supabase
+        .from("documents")
+        .update({
+          status: "error",
+          error_message:
+            "Text was extracted but saving the cleaned text failed. Please try again."
+        })
+        .eq("id", documentId);
+      return NextResponse.json({ ok: false, error: "Failed to save cleaned text" }, { status: 500 });
+    }
+
+    // 10) Mark ready to keep Step 1 redirect behavior
+    await supabase
+      .from("documents")
+      .update({ status: "ready", error_message: null })
+      .eq("id", documentId);
 
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unexpected error" }, { status: 500 });
+  } catch (err: unknown) {
+    console.error("complete route error", err);
+    return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
   }
 }
