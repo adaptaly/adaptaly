@@ -6,16 +6,17 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/(marketing)/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(marketing)/page.js"
-    ],
     "/(protected)/upload/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/css/app/(protected)/upload/page.css",
       "static/chunks/app/(protected)/upload/page.js"
+    ],
+    "/(auth)/signin/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/(auth)/signin/page.css",
+      "static/chunks/app/(auth)/signin/page.js"
     ],
     "/(auth)/signup/layout": [
       "static/chunks/webpack.js",
@@ -29,16 +30,10 @@
       "static/css/app/(auth)/signup/page.css",
       "static/chunks/app/(auth)/signup/page.js"
     ],
-    "/api/uploads/init/route": [
+    "/_not-found/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/uploads/init/route.js"
-    ],
-    "/(auth)/signin/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/css/app/(auth)/signin/page.css",
-      "static/chunks/app/(auth)/signin/page.js"
+      "static/chunks/app/_not-found/page.js"
     ]
   }
 }

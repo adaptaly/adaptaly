@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     // 1) Load the document and check if it's ready
     const { data: doc, error: docErr } = await supabase
       .from("documents")
-      .select("id,user_id,filename,status,storage_path,storage_bucket")
+      .select("id,filename,status,storage_path,storage_bucket")
       .eq("id", documentId)
       .single();
 

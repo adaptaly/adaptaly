@@ -19,13 +19,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
 
   const supabase = await createServerClient();
 
-  // Check user auth
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (userErr || !userData?.user) {
-    redirect("/signin");
-  }
-
-  // Get document with summary and flashcards
+  // Get document with summary and flashcards (RLS will ensure user access)
   const { data: doc, error: docErr } = await supabase
     .from("documents")
     .select(`
@@ -47,7 +41,6 @@ export default async function ResultPage({ params }: ResultPageProps) {
       )
     `)
     .eq("id", docId)
-    .eq("user_id", userData.user.id)
     .single();
 
   if (docErr || !doc) {

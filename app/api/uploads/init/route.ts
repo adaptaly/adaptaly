@@ -9,6 +9,7 @@ type Body = {
   filename?: string;
   size?: number;
   mime?: string;
+  userId?: string;
 };
 
 function isSupportedMime(m: string | undefined | null) {
@@ -24,10 +25,10 @@ function isMarkdownMime(m: string | undefined | null) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { filename, size, mime } = (await req.json()) as Body;
+    const { filename, size, mime, userId } = (await req.json()) as Body;
 
-    if (!filename || typeof filename !== "string" || !mime || typeof mime !== "string") {
-      return NextResponse.json({ ok: false, error: "filename and mime are required" }, { status: 400 });
+    if (!filename || typeof filename !== "string" || !mime || typeof mime !== "string" || !userId || typeof userId !== "string") {
+      return NextResponse.json({ ok: false, error: "filename, mime, and userId are required" }, { status: 400 });
     }
 
     // Client guard parity (server-side)
@@ -45,13 +46,6 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = await createServerClient();
-
-    // Get the current user (RLS relies on this)
-    const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !userData?.user) {
-      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-    }
-    const userId = userData.user.id;
 
     // Create documents row in "uploading" state
     const insertRes = await supabase

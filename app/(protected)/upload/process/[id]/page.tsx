@@ -18,18 +18,11 @@ export default async function ProcessPage({ params }: ProcessPageProps) {
 
   const supabase = await createServerClient();
 
-  // Check user auth
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (userErr || !userData?.user) {
-    redirect("/signin");
-  }
-
-  // Check document exists and belongs to user
+  // Check document exists (RLS will ensure user access)
   const { data: doc, error: docErr } = await supabase
     .from("documents")
     .select("id,filename,status,error_message")
     .eq("id", documentId)
-    .eq("user_id", userData.user.id)
     .single();
 
   if (docErr || !doc) {

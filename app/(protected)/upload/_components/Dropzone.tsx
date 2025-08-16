@@ -65,6 +65,14 @@ export default function Dropzone() {
     setPct(0);
 
     try {
+      // Get current user from Supabase client
+      const supabase = supabaseBrowser();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error("Not authenticated");
+      }
+
       // Step 1: Initialize upload in database
       const { data: initData, error: initError } = await fetch("/api/uploads/init", {
         method: "POST",
@@ -73,6 +81,7 @@ export default function Dropzone() {
           filename: file.name,
           size: file.size,
           mime: file.type,
+          userId: user.id,
         }),
       }).then(res => res.json());
 
@@ -83,7 +92,6 @@ export default function Dropzone() {
       const { documentId, bucket, path } = initData;
 
       // Step 2: Upload file to Supabase Storage
-      const supabase = supabaseBrowser();
       let uploadProgress = 0;
       const progressInterval = setInterval(() => {
         uploadProgress = Math.min(90, uploadProgress + Math.random() * 15 + 5);
