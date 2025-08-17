@@ -62,7 +62,13 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (insertRes.error || !insertRes.data) {
-      return NextResponse.json({ ok: false, error: "Failed to create document" }, { status: 500 });
+      console.error("Database insert error:", insertRes.error);
+      return NextResponse.json({ 
+        ok: false, 
+        error: "Failed to create document",
+        details: insertRes.error?.message || "Unknown database error",
+        supabaseError: insertRes.error
+      }, { status: 500 });
     }
 
     const documentId = insertRes.data.id as string;
@@ -79,7 +85,13 @@ export async function POST(req: NextRequest) {
       .eq("id", documentId);
 
     if (upd.error) {
-      return NextResponse.json({ ok: false, error: "Failed to persist storage path" }, { status: 500 });
+      console.error("Database update error:", upd.error);
+      return NextResponse.json({ 
+        ok: false, 
+        error: "Failed to persist storage path",
+        details: upd.error?.message || "Unknown update error",
+        supabaseError: upd.error
+      }, { status: 500 });
     }
 
     return NextResponse.json({
