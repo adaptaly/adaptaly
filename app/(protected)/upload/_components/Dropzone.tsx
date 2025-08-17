@@ -74,7 +74,7 @@ export default function Dropzone() {
       }
 
       // Step 1: Initialize upload in database
-      const { data: initData, error: initError } = await fetch("/api/uploads/init", {
+      const initResponse = await fetch("/api/uploads/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -83,10 +83,19 @@ export default function Dropzone() {
           mime: file.type,
           userId: user.id,
         }),
-      }).then(res => res.json());
+      });
 
-      if (!initData.ok) {
-        throw new Error(initData.error || "Failed to initialize upload");
+      const initData = await initResponse.json();
+      
+      if (!initResponse.ok || !initData.ok) {
+        console.error("Init upload failed:", {
+          status: initResponse.status,
+          statusText: initResponse.statusText,
+          error: initData.error,
+          details: initData.details,
+          stack: initData.stack
+        });
+        throw new Error(initData.error || `Upload initialization failed (${initResponse.status})`);
       }
 
       const { documentId, bucket, path } = initData;

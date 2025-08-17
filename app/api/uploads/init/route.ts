@@ -89,7 +89,13 @@ export async function POST(req: NextRequest) {
       path: storagePath,
     });
   } catch (e) {
-    console.error("uploads/init error", e);
-    return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
+    console.error("uploads/init error:", e);
+    const errorMessage = e instanceof Error ? e.message : "Unknown server error";
+    return NextResponse.json({ 
+      ok: false, 
+      error: "Server error", 
+      details: errorMessage,
+      stack: e instanceof Error ? e.stack : undefined
+    }, { status: 500 });
   }
 }
