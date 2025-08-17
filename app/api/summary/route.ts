@@ -128,6 +128,10 @@ export async function POST(req: NextRequest) {
 
       if (flashcardErr) {
         console.error("Failed to save flashcards:", flashcardErr);
+        return NextResponse.json({ 
+          error: "Summary generated but failed to save flashcards", 
+          details: flashcardErr.message 
+        }, { status: 500 });
       }
     }
 
@@ -137,8 +141,12 @@ export async function POST(req: NextRequest) {
       filename: doc.filename,
     });
   } catch (err: unknown) {
+    console.error("Summary route error:", err);
     const msg = err instanceof Error ? err.message : "Unexpected error during summarization.";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ 
+      error: msg,
+      details: err instanceof Error ? err.stack : undefined
+    }, { status: 500 });
   }
 }
 

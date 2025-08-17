@@ -144,14 +144,22 @@ export default function Dropzone() {
       setTimeout(() => setActiveIdx(2), 500);
       setTimeout(() => setActiveIdx(3), 1000);
 
-      const { data: summaryData, error: summaryError } = await fetch("/api/summary", {
+      const summaryResponse = await fetch("/api/summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentId }),
-      }).then(res => res.json());
+      });
 
-      if (summaryError || !summaryData) {
-        throw new Error("Failed to generate summary and flashcards");
+      const summaryData = await summaryResponse.json();
+      
+      if (!summaryResponse.ok || summaryData.error) {
+        console.error("Summary generation failed:", {
+          status: summaryResponse.status,
+          statusText: summaryResponse.statusText,
+          error: summaryData.error,
+          details: summaryData.details
+        });
+        throw new Error(summaryData.error || "Failed to generate summary and flashcards");
       }
 
       // Success!
