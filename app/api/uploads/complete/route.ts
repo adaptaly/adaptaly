@@ -129,12 +129,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Unsupported file type. Please upload PDF, DOCX, or TXT." }, { status: 400 });
     }
 
-    if (!rawText || rawText.trim().length === 0) {
+    // Check if we got meaningful text (more than just error messages)
+    const hasUsableText = rawText && 
+      rawText.trim().length > 0 && 
+      !rawText.includes("Unable to extract text") && 
+      !rawText.includes("appears to contain only images") &&
+      rawText.trim().length > 50; // At least 50 characters of actual content
+
+    if (!hasUsableText) {
       await supabase
         .from("documents")
         .update({ status: "error" })
         .eq("id", documentId);
-      return NextResponse.json({ ok: false, error: "We could not extract text from this file. If it is a scanned PDF, try exporting a text-based PDF." }, { status: 422 });
+      return NextResponse.json({ 
+        ok: false, 
+        error: rawText.includes("Unable to extract text") || rawText.includes("appears to contain only images") 
+          ? rawText 
+          : "We could not extract meaningful text from this file. If it is a scanned PDF, try exporting a text-based PDF."
+      }, { status: 422 });
     }
 
     // 7) Clean text
