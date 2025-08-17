@@ -76,20 +76,41 @@ export async function POST(req: NextRequest) {
     let summary: string;
     let flashcards: Flashcard[];
 
+    console.log("🤖 Summary API: Starting AI generation for document:", {
+      documentId,
+      filename: doc.filename,
+      textLength: rawText.length,
+      isConfigured: aimlapi.isConfigured()
+    });
+
     if (aimlapi.isConfigured()) {
+      console.log("✅ AIMLAPI is configured - calling generateSummary");
       try {
         const result = await aimlapi.generateSummary(rawText, doc.filename || "document");
         summary = result.summary;
         flashcards = result.flashcards;
+        console.log("✅ AIMLAPI succeeded - got summary and flashcards:", {
+          summaryLength: summary.length,
+          flashcardsCount: flashcards.length
+        });
       } catch (error) {
-        console.warn("AIMLAPI failed, using local fallback:", error);
+        console.error("❌ AIMLAPI failed, using local fallback:", error);
         // Fallback to local summarizer
         summary = createLocalSummary(rawText, 1300);
         flashcards = createLocalFlashcards(summary, 8);
+        console.log("⚠️ Using local fallback:", {
+          summaryLength: summary.length,
+          flashcardsCount: flashcards.length
+        });
       }
     } else {
+      console.warn("⚠️ AIMLAPI is NOT configured - using local fallback only");
       summary = createLocalSummary(rawText, 1300);
       flashcards = createLocalFlashcards(summary, 8);
+      console.log("📝 Local fallback generated:", {
+        summaryLength: summary.length,
+        flashcardsCount: flashcards.length
+      });
     }
 
     // 5) Store summary in database

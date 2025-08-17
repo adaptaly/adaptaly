@@ -49,6 +49,9 @@ export class AICache {
         .single();
 
       if (error || !data) {
+        if (error?.message?.includes("relation") || error?.message?.includes("does not exist")) {
+          console.warn("⚠️ AI cache table does not exist - caching disabled");
+        }
         return null;
       }
 
@@ -62,7 +65,7 @@ export class AICache {
         } : undefined,
       };
     } catch (error) {
-      console.error("Error reading from AI cache:", error);
+      console.warn("⚠️ Error reading from AI cache (table may not exist):", error);
       return null;
     }
   }
@@ -99,7 +102,11 @@ export class AICache {
           created_at: new Date().toISOString(),
         });
     } catch (error) {
-      console.error("Error storing to AI cache:", error);
+      if (error?.message?.includes("relation") || error?.message?.includes("does not exist")) {
+        console.warn("⚠️ AI cache table does not exist - caching disabled. Run database_ai_cache.sql to enable caching.");
+      } else {
+        console.warn("⚠️ Error storing to AI cache:", error);
+      }
       // Don't throw - caching should be non-blocking
     }
   }
@@ -130,7 +137,11 @@ export class AICache {
           created_at: new Date().toISOString(),
         });
     } catch (error) {
-      console.error("Error logging usage:", error);
+      if (error?.message?.includes("relation") || error?.message?.includes("does not exist")) {
+        console.warn("⚠️ Usage logs table does not exist - usage tracking disabled. Run database_ai_cache.sql to enable tracking.");
+      } else {
+        console.warn("⚠️ Error logging usage:", error);
+      }
       // Don't throw - logging should be non-blocking
     }
   }

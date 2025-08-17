@@ -44,14 +44,45 @@ class AIMLAPIClient {
   private readonly defaultTimeout: number;
 
   constructor() {
-    // Use MVP-style environment variables for compatibility
-    this.baseURL = (process.env.AIML_API_BASE || process.env.AIMLAPI_BASE_URL)?.replace(/\/+$/, "") || "https://api.aimlapi.com";
-    this.apiKey = process.env.AIML_API_KEY || process.env.AIMLAPI_KEY || "";
-    this.model = process.env.AIMLAPI_MODEL || "gpt-4o";
+    // Match user's environment variables from .env.local
+    const rawBaseURL = process.env.AIMLAPI_BASE_URL || process.env.AIML_API_BASE;
+    const rawApiKey = process.env.AIMLAPI_KEY || process.env.AIML_API_KEY;
+    const rawModel = process.env.AIMLAPI_MODEL;
+    
+    this.baseURL = rawBaseURL?.replace(/\/+$/, "").trim() || "https://api.aimlapi.com";
+    this.apiKey = rawApiKey?.trim() || "";
+    this.model = rawModel?.trim() || "gpt-4o";
     this.defaultTimeout = 45000; // 45 seconds
 
+    console.log("AIMLAPI Client Configuration:", {
+      baseURL: this.baseURL,
+      hasApiKey: !!this.apiKey,
+      apiKeyLength: this.apiKey.length,
+      model: this.model,
+      modelLength: this.model.length,
+      keySource: process.env.AIMLAPI_KEY ? "AIMLAPI_KEY" : process.env.AIML_API_KEY ? "AIML_API_KEY" : "none",
+      rawValues: {
+        rawModel: `"${rawModel}"`,
+        rawApiKeyLength: rawApiKey?.length || 0,
+        rawBaseURL: `"${rawBaseURL}"`
+      }
+    });
+
+    // Validate environment variables
     if (!this.apiKey) {
-      console.warn("AIML_API_KEY or AIMLAPI_KEY is not configured");
+      console.error("❌ AIMLAPI_KEY is not configured! Found in env:", Object.keys(process.env).filter(k => k.includes('AIML')));
+    } else if (this.apiKey.length < 20) {
+      console.error("❌ AIMLAPI_KEY seems too short - check your .env.local file");
+    } else {
+      console.log("✅ AIMLAPI configured successfully");
+    }
+    
+    // Check for common issues
+    if (rawModel && rawModel !== rawModel.trim()) {
+      console.warn("⚠️ AIMLAPI_MODEL has trailing whitespace - trimming automatically");
+    }
+    if (rawModel && rawModel.includes('\\')) {
+      console.error("❌ AIMLAPI_MODEL contains backslashes - remove them from .env.local!");
     }
   }
 
@@ -59,6 +90,12 @@ class AIMLAPIClient {
     messages: ChatMessage[],
     options: GenerateOptions = {}
   ): Promise<string> {
+    console.log("🚀 AIMLAPI chat() called with:", {
+      messageCount: messages.length,
+      options,
+      isConfigured: this.isConfigured()
+    });
+
     const {
       temperature = 0.2,
       max_tokens = 500, // Reduced to MVP levels for efficiency
@@ -72,41 +109,71 @@ class AIMLAPIClient {
     try {
       const cached = await AICache.get(inputKey, this.model, temperature);
       if (cached) {
-        console.log("AI Cache hit - using cached response");
+        console.log("✅ AI Cache hit - using cached response");
         return cached.response;
+      } else {
+        console.log("❌ No cache hit - proceeding with API call");
       }
     } catch (error) {
-      console.warn("Cache lookup failed, proceeding with API call:", error);
+      console.warn("⚠️ Cache lookup failed, proceeding with API call:", error);
     }
 
+    if (!this.isConfigured()) {
+      console.error("❌ AIMLAPI not configured - API key missing!");
+      throw new Error("AIMLAPI not configured - missing API key");
+    }
+
+    console.log("🌐 Making AIMLAPI request to:", `${this.baseURL}/v1/chat/completions`);
+    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
+      const requestBody = {
+        model: this.model,
+        messages,
+        temperature,
+        max_tokens,
+      };
+      
+      console.log("📤 Request payload:", {
+        url: `${this.baseURL}/v1/chat/completions`,
+        body: requestBody,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey.slice(0, 10)}...`
+        }
+      });
+
       const response = await fetch(`${this.baseURL}/v1/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({
-          model: this.model,
-          messages,
-          temperature,
-          max_tokens,
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
+      console.log("📥 AIMLAPI Response status:", response.status, response.statusText);
+
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
+        console.error("❌ AIMLAPI Error Response:", errorText);
         throw new Error(`AIMLAPI error ${response.status}: ${errorText || response.statusText}`);
       }
 
       const data: AIMLResponse = await response.json();
+      console.log("✅ AIMLAPI Success - got response:", {
+        hasChoices: !!data.choices?.length,
+        usage: data.usage,
+        contentLength: data.choices?.[0]?.message?.content?.length || 0
+      });
+
       const content = data.choices?.[0]?.message?.content?.trim() ?? "";
       
       if (!content) {
+        console.error("❌ Empty content from AIMLAPI response:", data);
         throw new Error("Empty response from AIMLAPI");
       }
 
@@ -116,20 +183,40 @@ class AIMLAPIClient {
         if (usage) {
           await AICache.set(inputKey, content, this.model, temperature, usage);
           await AICache.logUsage(this.model, "chat", usage);
+          console.log("💾 Response cached with usage:", usage);
         } else {
           await AICache.set(inputKey, content, this.model, temperature);
+          console.log("💾 Response cached without usage data");
         }
       } catch (error) {
-        console.warn("Failed to cache response:", error);
+        console.warn("⚠️ Failed to cache response:", error);
       }
 
+      console.log("✅ AIMLAPI chat completed successfully");
       return content;
+    } catch (error) {
+      console.error("❌ AIMLAPI chat failed:", error);
+      throw error;
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
   async generateSummary(text: string, filename: string): Promise<SummaryResponse> {
+    console.log("📝 generateSummary() called:", {
+      filename,
+      textLength: text.length,
+      isConfigured: this.isConfigured()
+    });
+
+    if (!this.isConfigured()) {
+      console.warn("⚠️ AIMLAPI not configured, using fallback summary");
+      return {
+        summary: this.createFallbackSummary([]),
+        flashcards: this.createFallbackFlashcards([])
+      };
+    }
+
     // Create cache key for the entire summary generation
     const summaryInputKey = JSON.stringify({ 
       text: text.slice(0, 1000), // First 1000 chars for cache key
@@ -142,14 +229,16 @@ class AIMLAPIClient {
     try {
       const cached = await AICache.get(summaryInputKey, this.model, 0.2);
       if (cached) {
-        console.log("AI Cache hit for summary generation");
+        console.log("✅ AI Cache hit for summary generation");
         return this.parseJsonResponse<SummaryResponse>(cached.response, {
           summary: this.createFallbackSummary([]),
           flashcards: this.createFallbackFlashcards([]),
         });
+      } else {
+        console.log("❌ No cache hit for summary - will generate new");
       }
     } catch (error) {
-      console.warn("Summary cache lookup failed:", error);
+      console.warn("⚠️ Summary cache lookup failed:", error);
     }
 
     const chunks = this.chunkText(text, 6000);
