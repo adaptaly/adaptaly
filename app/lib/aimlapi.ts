@@ -1,4 +1,6 @@
 // app/lib/aimlapi.ts
+import { AICache } from "./ai-cache";
+
 export interface AIMLResponse<T = unknown> {
   choices: Array<{
     message: {
@@ -42,13 +44,14 @@ class AIMLAPIClient {
   private readonly defaultTimeout: number;
 
   constructor() {
-    this.baseURL = process.env.AIMLAPI_BASE_URL?.replace(/\/+$/, "") || "https://api.aimlapi.com";
-    this.apiKey = process.env.AIMLAPI_KEY || "";
+    // Use MVP-style environment variables for compatibility
+    this.baseURL = (process.env.AIML_API_BASE || process.env.AIMLAPI_BASE_URL)?.replace(/\/+$/, "") || "https://api.aimlapi.com";
+    this.apiKey = process.env.AIML_API_KEY || process.env.AIMLAPI_KEY || "";
     this.model = process.env.AIMLAPI_MODEL || "gpt-4o";
     this.defaultTimeout = 45000; // 45 seconds
 
     if (!this.apiKey) {
-      console.warn("AIMLAPI_KEY is not configured");
+      console.warn("AIML_API_KEY or AIMLAPI_KEY is not configured");
     }
   }
 
@@ -58,9 +61,23 @@ class AIMLAPIClient {
   ): Promise<string> {
     const {
       temperature = 0.2,
-      max_tokens = 4000,
+      max_tokens = 500, // Reduced to MVP levels for efficiency
       timeout = this.defaultTimeout,
     } = options;
+
+    // Create cache key from messages
+    const inputKey = JSON.stringify({ messages, temperature, model: this.model });
+    
+    // Try to get cached response first
+    try {
+      const cached = await AICache.get(inputKey, this.model, temperature);
+      if (cached) {
+        console.log("AI Cache hit - using cached response");
+        return cached.response;
+      }
+    } catch (error) {
+      console.warn("Cache lookup failed, proceeding with API call:", error);
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -93,6 +110,19 @@ class AIMLAPIClient {
         throw new Error("Empty response from AIMLAPI");
       }
 
+      // Cache the response and log usage
+      try {
+        const usage = data.usage;
+        if (usage) {
+          await AICache.set(inputKey, content, this.model, temperature, usage);
+          await AICache.logUsage(this.model, "chat", usage);
+        } else {
+          await AICache.set(inputKey, content, this.model, temperature);
+        }
+      } catch (error) {
+        console.warn("Failed to cache response:", error);
+      }
+
       return content;
     } finally {
       clearTimeout(timeoutId);
@@ -100,6 +130,28 @@ class AIMLAPIClient {
   }
 
   async generateSummary(text: string, filename: string): Promise<SummaryResponse> {
+    // Create cache key for the entire summary generation
+    const summaryInputKey = JSON.stringify({ 
+      text: text.slice(0, 1000), // First 1000 chars for cache key
+      filename,
+      chunks: this.chunkText(text, 6000).length,
+      operation: "generateSummary" 
+    });
+    
+    // Try cache first
+    try {
+      const cached = await AICache.get(summaryInputKey, this.model, 0.2);
+      if (cached) {
+        console.log("AI Cache hit for summary generation");
+        return this.parseJsonResponse<SummaryResponse>(cached.response, {
+          summary: this.createFallbackSummary([]),
+          flashcards: this.createFallbackFlashcards([]),
+        });
+      }
+    } catch (error) {
+      console.warn("Summary cache lookup failed:", error);
+    }
+
     const chunks = this.chunkText(text, 6000);
     
     // Map: summarize each chunk to bullets
@@ -157,7 +209,19 @@ class AIMLAPIClient {
           `Return JSON EXACTLY like:\n` +
           `{"summary":"## Main Topic\\n\\nKey points...","flashcards":[{"question":"What is...?","answer":"...","hint":"Think about..."},{"question":"How does...?","answer":"..."}]}`,
       },
-    ], { temperature: 0.1, max_tokens: 6000 });
+    ], { temperature: 0.1, max_tokens: 1000 }); // Reduced for efficiency like MVP
+
+    // Cache the final result for future use
+    try {
+      await AICache.set(summaryInputKey, finalJsonText, this.model, 0.1);
+      await AICache.logUsage(this.model, "generateSummary", {
+        prompt_tokens: 0, // Approximate values since we don't have exact usage from nested calls
+        completion_tokens: Math.floor(finalJsonText.length / 4), // Rough estimate
+        total_tokens: Math.floor(finalJsonText.length / 4),
+      });
+    } catch (error) {
+      console.warn("Failed to cache summary:", error);
+    }
 
     return this.parseJsonResponse<SummaryResponse>(finalJsonText, {
       summary: this.createFallbackSummary(bullets),

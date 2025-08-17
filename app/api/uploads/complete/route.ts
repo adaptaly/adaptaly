@@ -96,45 +96,57 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await downloadRes.data.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 6) Extract text
+    // 6) Extract text with robust fallback like MVP
     let rawText = "";
     let pageCount: number | null = null;
 
-    if (doc.mime === "application/pdf") {
-      const pdf = await extractPdf(buffer);
-      rawText = pdf.text;
-      pageCount = typeof pdf.pageCount === "number" ? pdf.pageCount : 0;
+    try {
+      if (doc.mime === "application/pdf") {
+        const pdf = await extractPdf(buffer);
+        rawText = pdf.text;
+        pageCount = typeof pdf.pageCount === "number" ? pdf.pageCount : 0;
 
-      // Enforce the 60-page cap after parsing
-      if (pageCount !== null && pageCount > 60) {
+        // Enforce the 60-page cap after parsing
+        if (pageCount !== null && pageCount > 60) {
+          await supabase
+            .from("documents")
+            .update({
+              status: "error",
+              page_count: pageCount,
+            })
+            .eq("id", documentId);
+          return NextResponse.json({ ok: false, error: "Your PDF has more than 60 pages after parsing. Please upload a shorter PDF or split it." }, { status: 400 });
+        }
+      } else if (doc.mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+        const docx = await extractDocx(buffer);
+        rawText = docx.text;
+      } else if (doc.mime === "text/plain") {
+        rawText = buffer.toString("utf-8");
+      } else {
+        // For other file types, try best-effort decode like MVP
+        rawText = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+      }
+    } catch (extractError: any) {
+      // If extraction fails, try best-effort fallback like MVP
+      console.warn(`Text extraction failed for ${doc.filename}, trying fallback:`, extractError.message);
+      
+      try {
+        rawText = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+        console.log(`Fallback extraction succeeded for ${doc.filename}`);
+      } catch (fallbackError) {
         await supabase
           .from("documents")
-          .update({
-            status: "error",
-            page_count: pageCount,
-          })
+          .update({ status: "error" })
           .eq("id", documentId);
-        return NextResponse.json({ ok: false, error: "Your PDF has more than 60 pages after parsing. Please upload a shorter PDF or split it." }, { status: 400 });
+        return NextResponse.json({ 
+          ok: false, 
+          error: extractError.message || "We could not extract text from this file. Please try a different file format or check if the file is corrupted."
+        }, { status: 400 });
       }
-    } else if (doc.mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      const docx = await extractDocx(buffer);
-      rawText = docx.text;
-    } else if (doc.mime === "text/plain") {
-      rawText = buffer.toString("utf-8");
-    } else {
-      await supabase
-        .from("documents")
-        .update({ status: "error" })
-        .eq("id", documentId);
-      return NextResponse.json({ ok: false, error: "Unsupported file type. Please upload PDF, DOCX, or TXT." }, { status: 400 });
     }
 
-    // Check if we got meaningful text (more than just error messages)
-    const hasUsableText = rawText && 
-      rawText.trim().length > 0 && 
-      !rawText.includes("Unable to extract text") && 
-      !rawText.includes("appears to contain only images") &&
-      rawText.trim().length > 50; // At least 50 characters of actual content
+    // Check if we got meaningful text - be more forgiving like MVP
+    const hasUsableText = rawText && rawText.trim().length > 10; // Just need some content
 
     if (!hasUsableText) {
       await supabase
@@ -143,10 +155,13 @@ export async function POST(req: NextRequest) {
         .eq("id", documentId);
       return NextResponse.json({ 
         ok: false, 
-        error: rawText.includes("Unable to extract text") || rawText.includes("appears to contain only images") 
-          ? rawText 
-          : "We could not extract meaningful text from this file. If it is a scanned PDF, try exporting a text-based PDF."
+        error: "We could not extract any text from this file. This might happen if the file is empty, corrupted, or contains only images. Please check the file and try again."
       }, { status: 422 });
+    }
+
+    // If we have text but it contains error messages, still proceed but warn user
+    if (rawText.includes("appears to contain only images") || rawText.includes("only scanned content")) {
+      console.warn(`File ${doc.filename} may contain scanned content but proceeding with available text`);
     }
 
     // 7) Clean text
