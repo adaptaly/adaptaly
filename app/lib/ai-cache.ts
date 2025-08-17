@@ -1,6 +1,7 @@
 // AI response caching system like MVP
 import { createHash } from "crypto";
 import { createServerClient } from "@/src/lib/supabaseServer";
+import { isDatabaseRelationError } from "./error-utils";
 
 interface CacheOptions {
   ttlHours?: number; // Time to live in hours
@@ -49,7 +50,7 @@ export class AICache {
         .single();
 
       if (error || !data) {
-        if (error?.message?.includes("relation") || error?.message?.includes("does not exist")) {
+        if (isDatabaseRelationError(error)) {
           console.warn("⚠️ AI cache table does not exist - caching disabled");
         }
         return null;
@@ -64,7 +65,7 @@ export class AICache {
           total_tokens: data.total_tokens,
         } : undefined,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn("⚠️ Error reading from AI cache (table may not exist):", error);
       return null;
     }
@@ -101,8 +102,8 @@ export class AICache {
           total_tokens: usage?.total_tokens || null,
           created_at: new Date().toISOString(),
         });
-    } catch (error) {
-      if (error?.message?.includes("relation") || error?.message?.includes("does not exist")) {
+    } catch (error: unknown) {
+      if (isDatabaseRelationError(error)) {
         console.warn("⚠️ AI cache table does not exist - caching disabled. Run database_ai_cache.sql to enable caching.");
       } else {
         console.warn("⚠️ Error storing to AI cache:", error);
@@ -136,8 +137,8 @@ export class AICache {
           total_tokens: usage.total_tokens,
           created_at: new Date().toISOString(),
         });
-    } catch (error) {
-      if (error?.message?.includes("relation") || error?.message?.includes("does not exist")) {
+    } catch (error: unknown) {
+      if (isDatabaseRelationError(error)) {
         console.warn("⚠️ Usage logs table does not exist - usage tracking disabled. Run database_ai_cache.sql to enable tracking.");
       } else {
         console.warn("⚠️ Error logging usage:", error);
@@ -158,7 +159,7 @@ export class AICache {
         .from("ai_cache")
         .delete()
         .lt("created_at", cutoff);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error cleaning cache:", error);
     }
   }
