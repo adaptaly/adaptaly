@@ -174,7 +174,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
-    console.error("complete route error", err);
-    return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
+    console.error("complete route error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Unknown server error";
+    return NextResponse.json({ 
+      ok: false, 
+      error: "Server error", 
+      details: errorMessage,
+      stack: err instanceof Error ? err.stack : undefined
+    }, { status: 500 });
   }
 }

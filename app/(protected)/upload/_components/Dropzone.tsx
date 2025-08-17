@@ -121,14 +121,23 @@ export default function Dropzone() {
       // Step 3: Process the uploaded file
       setTimeout(() => setActiveIdx(1), 250);
       
-      const { data: processData, error: processError } = await fetch("/api/uploads/complete", {
+      const processResponse = await fetch("/api/uploads/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentId }),
-      }).then(res => res.json());
+      });
 
-      if (!processData.ok) {
-        throw new Error(processData.error || "Failed to process file");
+      const processData = await processResponse.json();
+      
+      if (!processResponse.ok || !processData.ok) {
+        console.error("Process upload failed:", {
+          status: processResponse.status,
+          statusText: processResponse.statusText,
+          error: processData.error,
+          details: processData.details,
+          stack: processData.stack
+        });
+        throw new Error(processData.error || `Process failed (${processResponse.status})`);
       }
 
       // Step 4: Generate summary and flashcards
