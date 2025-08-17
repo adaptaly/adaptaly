@@ -1,0 +1,21 @@
+/* Summary Markdown Styling */
+.summary-heading {
+  margin: 24px 0 12px;
+  font-weight: 700;
+  color: var(--up-fg);
+  border-bottom: 2px solid var(--up-accent-soft);
+  padding-bottom: 8px;
+  font-size: 18px;
+}
+
+.summary-heading:first-child {
+  margin-top: 0;
+}
+
+.summary-content h2.summary-heading {
+  font-size: 20px;
+}
+
+.summary-content h3.summary-heading {
+  font-size: 18px;
+}

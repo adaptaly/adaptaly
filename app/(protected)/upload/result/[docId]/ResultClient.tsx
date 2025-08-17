@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import FlippableCard from "../_components/FlippableCard";
+import "../_components/FlippableCard.css";
 
 interface Summary {
   id: string;
@@ -34,6 +36,38 @@ export default function ResultClient({
 }: ResultClientProps) {
   const [activeTab, setActiveTab] = useState<"summary" | "flashcards">("summary");
   const [previewCard, setPreviewCard] = useState<number>(0);
+
+  // Simple markdown renderer for summaries
+  const renderMarkdownSummary = (content: string) => {
+    const lines = content.split('\n');
+    const elements: React.ReactNode[] = [];
+    
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      
+      // Check for markdown headers
+      if (trimmed.startsWith('## ')) {
+        elements.push(
+          <h3 key={`h3-${index}`} className="summary-heading">
+            {trimmed.slice(3)}
+          </h3>
+        );
+      } else if (trimmed.startsWith('# ')) {
+        elements.push(
+          <h2 key={`h2-${index}`} className="summary-heading">
+            {trimmed.slice(2)}
+          </h2>
+        );
+      } else {
+        elements.push(
+          <p key={`p-${index}`}>{trimmed}</p>
+        );
+      }
+    });
+    
+    return elements;
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -134,11 +168,7 @@ export default function ResultClient({
                     </div>
                   </div>
                   <div className="summary-content">
-                    {summary.content.split('\n').map((paragraph, index) => (
-                      paragraph.trim() && (
-                        <p key={index}>{paragraph.trim()}</p>
-                      )
-                    ))}
+                    {renderMarkdownSummary(summary.content)}
                   </div>
                 </div>
               </div>
@@ -157,21 +187,10 @@ export default function ResultClient({
                       </div>
                       
                       <div className="flashcard-container">
-                        <div className="flashcard">
-                          <div className="flashcard-question">
-                            <h3>Question</h3>
-                            <p>{flashcards[previewCard]?.question}</p>
-                          </div>
-                          <div className="flashcard-answer">
-                            <h3>Answer</h3>
-                            <p>{flashcards[previewCard]?.answer}</p>
-                            {flashcards[previewCard]?.hint && (
-                              <div className="flashcard-hint">
-                                <strong>Hint:</strong> {flashcards[previewCard].hint}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        <FlippableCard 
+                          flashcard={flashcards[previewCard]}
+                          isActive={true}
+                        />
                       </div>
 
                       <div className="flashcard-controls">
