@@ -15,7 +15,6 @@ type DocRow = {
   mime: string | null;
   size_bytes: number | null;
   status: "uploading" | "processing" | "ready" | "error";
-  error_message: string | null;
   page_count: number | null;
   storage_path: string | null;
   storage_bucket?: string | null;
@@ -49,7 +48,7 @@ export async function POST(req: NextRequest) {
     const { data: doc, error: docErr } = await supabase
       .from("documents")
       .select(
-        "id,user_id,filename,mime,size_bytes,status,error_message,page_count,storage_path,storage_bucket"
+        "id,user_id,filename,mime,size_bytes,status,page_count,storage_path,storage_bucket"
       )
       .eq("id", documentId)
       .single<DocRow>();
@@ -61,18 +60,14 @@ export async function POST(req: NextRequest) {
     // 2) Mark processing
     await supabase
       .from("documents")
-      .update({ status: "processing", error_message: null })
+      .update({ status: "processing" })
       .eq("id", documentId);
 
     // 3) Validate MIME on server
     if (isMarkdownMime(doc.mime) || !isSupportedMime(doc.mime)) {
       await supabase
         .from("documents")
-        .update({
-          status: "error",
-          error_message:
-            "Unsupported file type. Please upload PDF, DOCX, or TXT. Markdown is not supported."
-        })
+        .update({ status: "error" })
         .eq("id", documentId);
       return NextResponse.json({ ok: false, error: "Unsupported file type" }, { status: 400 });
     }
@@ -83,11 +78,7 @@ export async function POST(req: NextRequest) {
     if (!storagePath) {
       await supabase
         .from("documents")
-        .update({
-          status: "error",
-          error_message:
-            "The uploaded file path could not be found. Please re-upload your file."
-        })
+        .update({ status: "error" })
         .eq("id", documentId);
       return NextResponse.json({ ok: false, error: "Missing storage path" }, { status: 400 });
     }
@@ -97,11 +88,7 @@ export async function POST(req: NextRequest) {
     if (downloadRes.error) {
       await supabase
         .from("documents")
-        .update({
-          status: "error",
-          error_message:
-            "We could not access the uploaded file. Please try uploading again."
-        })
+        .update({ status: "error" })
         .eq("id", documentId);
       return NextResponse.json({ ok: false, error: "Download failed" }, { status: 500 });
     }
@@ -125,11 +112,9 @@ export async function POST(req: NextRequest) {
           .update({
             status: "error",
             page_count: pageCount,
-            error_message:
-              "Your PDF has more than 60 pages after parsing. Please upload a shorter PDF or split it."
           })
           .eq("id", documentId);
-        return NextResponse.json({ ok: false, error: "PDF exceeds 60 pages" }, { status: 400 });
+        return NextResponse.json({ ok: false, error: "Your PDF has more than 60 pages after parsing. Please upload a shorter PDF or split it." }, { status: 400 });
       }
     } else if (doc.mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       const docx = await extractDocx(buffer);
@@ -139,24 +124,17 @@ export async function POST(req: NextRequest) {
     } else {
       await supabase
         .from("documents")
-        .update({
-          status: "error",
-          error_message: "Unsupported file type. Please upload PDF, DOCX, or TXT."
-        })
+        .update({ status: "error" })
         .eq("id", documentId);
-      return NextResponse.json({ ok: false, error: "Unsupported type" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Unsupported file type. Please upload PDF, DOCX, or TXT." }, { status: 400 });
     }
 
     if (!rawText || rawText.trim().length === 0) {
       await supabase
         .from("documents")
-        .update({
-          status: "error",
-          error_message:
-            "We could not extract text from this file. If it is a scanned PDF, try exporting a text-based PDF."
-        })
+        .update({ status: "error" })
         .eq("id", documentId);
-      return NextResponse.json({ ok: false, error: "No text extracted" }, { status: 422 });
+      return NextResponse.json({ ok: false, error: "We could not extract text from this file. If it is a scanned PDF, try exporting a text-based PDF." }, { status: 422 });
     }
 
     // 7) Clean text
@@ -183,19 +161,15 @@ export async function POST(req: NextRequest) {
     if (uploadClean.error) {
       await supabase
         .from("documents")
-        .update({
-          status: "error",
-          error_message:
-            "Text was extracted but saving the cleaned text failed. Please try again."
-        })
+        .update({ status: "error" })
         .eq("id", documentId);
-      return NextResponse.json({ ok: false, error: "Failed to save cleaned text" }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Text was extracted but saving the cleaned text failed. Please try again." }, { status: 500 });
     }
 
     // 10) Mark ready to keep Step 1 redirect behavior
     await supabase
       .from("documents")
-      .update({ status: "ready", error_message: null })
+      .update({ status: "ready" })
       .eq("id", documentId);
 
     return NextResponse.json({ ok: true });

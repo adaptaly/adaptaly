@@ -56,7 +56,6 @@ export async function POST(req: NextRequest) {
         mime,
         size_bytes: size ?? null,
         status: "uploading",
-        error_message: null,
       })
       .select("id")
       .single();
