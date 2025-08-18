@@ -3,6 +3,8 @@
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/src/lib/supabaseClient";
+import ProcessingLevelSelector from "@/app/components/ProcessingLevelSelector";
+import { ProcessingLevel } from "@/app/lib/token-estimator";
 
 type Step = "Uploading" | "Cleaning text" | "Summarizing" | "Building flashcards";
 const STEPS: Step[] = ["Uploading", "Cleaning text", "Summarizing", "Building flashcards"];
@@ -13,7 +15,7 @@ const ALLOWED_TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "text/plain",
 ];
-const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md"];
+const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt"];
 
 interface Message {
   text: string;
@@ -23,12 +25,14 @@ interface Message {
 export default function Dropzone() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [mode, setMode] = useState<"idle" | "progress" | "done" | "error">("idle");
+  const [mode, setMode] = useState<"idle" | "select-level" | "progress" | "done" | "error">("idle");
   const [activeIdx, setActiveIdx] = useState<number>(0);
   const [pct, setPct] = useState(0);
   const [message, setMessage] = useState<Message | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [documentId, setDocumentId] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [processingLevel, setProcessingLevel] = useState<ProcessingLevel['id']>('standard');
   const router = useRouter();
 
   const openPicker = () => inputRef.current?.click();
@@ -44,7 +48,7 @@ export default function Dropzone() {
     }
     const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
     if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(ext)) {
-      return `"${file.name}" is not supported. Use PDF, DOCX, TXT, or MD.`;
+      return `"${file.name}" is not supported. Use PDF, DOCX, or TXT files.`;
     }
     return null;
   };
@@ -58,6 +62,13 @@ export default function Dropzone() {
       showMessage(error, "error");
       return;
     }
+
+    setSelectedFile(file);
+    setMode("select-level");
+  }
+
+  async function startProcessing() {
+    if (!selectedFile) return;
 
     setIsUploading(true);
     setMode("progress");
@@ -78,10 +89,11 @@ export default function Dropzone() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: file.name,
-          size: file.size,
-          mime: file.type,
+          filename: selectedFile.name,
+          size: selectedFile.size,
+          mime: selectedFile.type,
           userId: user.id,
+          processingLevel,
         }),
       });
 
@@ -109,7 +121,7 @@ export default function Dropzone() {
 
       const { error: uploadError } = await supabase.storage
         .from(bucket)
-        .upload(path, file, { upsert: true });
+        .upload(path, selectedFile, { upsert: true });
 
       clearInterval(progressInterval);
       setPct(100);
@@ -165,7 +177,7 @@ export default function Dropzone() {
       // Success!
       setTimeout(() => {
         setMode("done");
-        showMessage(`"${file.name}" processed successfully!`, "success");
+        showMessage(`"${selectedFile.name}" processed successfully!`, "success");
       }, 1500);
 
       // Store documentId for success button navigation
@@ -222,7 +234,7 @@ export default function Dropzone() {
                 </button>
               </div>
 
-              <p className="up-formats" id="file-formats">PDF, DOCX, TXT, MD. Up to 15 MB and 60 pages.</p>
+              <p className="up-formats" id="file-formats">PDF, DOCX, TXT. Up to 15 MB and 60 pages.</p>
               
               {message && (
                 <div 
@@ -236,7 +248,44 @@ export default function Dropzone() {
             </div>
           )}
 
-          {mode !== "idle" && (
+          {mode === "select-level" && selectedFile && (
+            <div className="up-dz-level-select" aria-live="polite">
+              <div className="up-file-selected">
+                <FileIcon className="up-file-icon" />
+                <div className="up-file-info">
+                  <h3 className="up-file-name">{selectedFile.name}</h3>
+                  <p className="up-file-size">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                </div>
+              </div>
+
+              <ProcessingLevelSelector
+                selectedLevel={processingLevel}
+                onLevelChange={setProcessingLevel}
+                file={selectedFile}
+                className="up-processing-selector"
+              />
+
+              <div className="up-level-actions">
+                <button 
+                  className="up-btn secondary"
+                  onClick={() => {
+                    setMode("idle");
+                    setSelectedFile(null);
+                  }}
+                >
+                  Choose Different File
+                </button>
+                <button 
+                  className="up-btn primary"
+                  onClick={startProcessing}
+                >
+                  Start Processing
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(mode === "progress" || mode === "done" || mode === "error") && (
             <div className="up-dz-progress" aria-live="polite">
               <h3 className="up-progress-title">Preparing your Study Pack</h3>
 
@@ -293,6 +342,7 @@ export default function Dropzone() {
                     onClick={() => {
                       setMode("idle");
                       setIsUploading(false);
+                      setSelectedFile(null);
                       setMessage(null);
                     }}
                   >
@@ -307,7 +357,7 @@ export default function Dropzone() {
             ref={inputRef}
             className="up-visually-hidden"
             type="file"
-            accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+            accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
             onChange={(e) => { handleFiles(e.target.files); e.currentTarget.value = ""; }}
             tabIndex={-1}
           />
@@ -346,3 +396,11 @@ function CheckIcon(){ return (<svg viewBox="0 0 24 24" width="18" height="18" ar
 function DotIcon(){ return (<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="currentColor" opacity=".35" /></svg>); }
 function SpinnerIcon(){ return (<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" className="up-spin"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.5" opacity=".4"/><path d="M12 4a8 8 0 0 1 8 8" fill="none" stroke="currentColor" strokeWidth="1.5"/></svg>); }
 function ErrorIcon(){ return (<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>); }
+function FileIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points="13,2 13,9 20,9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
