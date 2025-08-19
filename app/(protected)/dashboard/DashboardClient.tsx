@@ -1,7 +1,7 @@
 // app/(protected)/dashboard/DashboardClient.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Hero from "./_components/Hero";
 import GoalRing from "./_components/GoalRing";
 import StatsRow from "./_components/StatsRow";
@@ -12,6 +12,11 @@ import StickyCTA from "./_components/StickyCTA";
 import SettingsSheet from "./_components/SettingsSheet";
 import HeroChecklist from "./_components/HeroChecklist";
 import StreakStrip from "./_components/StreakStripe";
+import LearningAnalytics from "./_components/LearningAnalytics";
+import StudyRecommendations from "./_components/StudyRecommendations";
+import ProgressChart from "./_components/ProgressChart";
+import { getLearningAnalytics } from "@/app/lib/performance-tracker";
+import type { LearningAnalytics as LearningAnalyticsType } from "@/app/lib/performance-tracker";
 
 import type { DashboardSummary } from "@/src/lib/dashboard";
 import type { UserPrefs } from "@/src/lib/prefs";
@@ -24,6 +29,22 @@ type Props = {
 
 export default function DashboardClient({ userId, summary, prefs }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [analytics, setAnalytics] = useState<LearningAnalyticsType | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadAnalytics() {
+      try {
+        const analyticsData = await getLearningAnalytics(userId);
+        setAnalytics(analyticsData);
+      } catch (error) {
+        console.error("Failed to load analytics:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadAnalytics();
+  }, [userId]);
 
   const tip = useMemo(() => {
     if (summary.minutesToday < prefs.minutes_goal && summary.dueCount > 0) {
@@ -80,6 +101,17 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
             </div>
           </div>
 
+          <StudyRecommendations
+            dueCount={summary.dueCount}
+            analytics={analytics}
+            loading={loading}
+          />
+
+          <ProgressChart
+            analytics={analytics}
+            loading={loading}
+          />
+
           <FocusCard
             averageRecallPct={summary.averageRecallPct}
             weakestTopic={summary.weakestTopic}
@@ -94,6 +126,10 @@ export default function DashboardClient({ userId, summary, prefs }: Props) {
         </section>
 
         <aside className="db-right">
+          <LearningAnalytics
+            analytics={analytics}
+            loading={loading}
+          />
           <UtilityPanel tip={tip} />
         </aside>
       </div>
