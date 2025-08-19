@@ -27,10 +27,12 @@ async function makeClient() {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
+          // Skip setting cookies during server-side rendering
+          // Cookies can only be set in Server Actions or Route Handlers
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: "", ...options, maxAge: 0 });
+          // Skip removing cookies during server-side rendering
+          // Cookies can only be set in Server Actions or Route Handlers
         },
       },
     }

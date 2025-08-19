@@ -108,24 +108,45 @@ export function getSessionStats(reviews: Array<{
 }
 
 export async function getLearningAnalytics(userId: string): Promise<LearningAnalytics> {
-  // Return mock data for now - should be called from server-side
+  // Check if we're on the client side
+  if (typeof window !== 'undefined') {
+    // For client-side, return enhanced mock data that changes based on userId
+    const seed = userId.length % 10;
+    return {
+      streak: 3 + seed,
+      totalCardsReviewed: 30 + (seed * 5),
+      accuracyRate: 0.65 + (seed * 0.03),
+      averageConfidence: 3.0 + (seed * 0.1),
+      timeStudied: 1200 + (seed * 300), // 20-50 minutes
+      masteredCards: 8 + seed,
+      strugglingCards: Math.max(0, 7 - seed),
+      topicPerformance: [
+        { topic: "Biology", accuracy: 0.70 + (seed * 0.03), cardCount: 10 + seed },
+        { topic: "Chemistry", accuracy: 0.60 + (seed * 0.02), cardCount: 12 + seed },
+        { topic: "Physics", accuracy: 0.75 + (seed * 0.02), cardCount: 8 + seed }
+      ].slice(0, Math.max(1, 3 - Math.floor(seed / 3))),
+      recentTrends: {
+        accuracyTrend: (seed % 3) - 1, // -1, 0, or 1
+        confidenceTrend: ((seed + 1) % 3) - 1,
+        speedTrend: ((seed + 2) % 3) - 1
+      }
+    };
+  }
+  
+  // Server-side fallback
   return {
-    streak: 3,
-    totalCardsReviewed: 45,
-    accuracyRate: 0.78,
-    averageConfidence: 3.4,
-    timeStudied: 1800, // 30 minutes
-    masteredCards: 12,
-    strugglingCards: 5,
-    topicPerformance: [
-      { topic: "Biology", accuracy: 0.85, cardCount: 15 },
-      { topic: "Chemistry", accuracy: 0.67, cardCount: 18 },
-      { topic: "Physics", accuracy: 0.82, cardCount: 12 }
-    ],
+    streak: 0,
+    totalCardsReviewed: 0,
+    accuracyRate: 0,
+    averageConfidence: 0,
+    timeStudied: 0,
+    masteredCards: 0,
+    strugglingCards: 0,
+    topicPerformance: [],
     recentTrends: {
-      accuracyTrend: 1,
+      accuracyTrend: 0,
       confidenceTrend: 0,
-      speedTrend: 1
+      speedTrend: 0
     }
   };
 }

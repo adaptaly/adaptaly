@@ -145,14 +145,14 @@ export default function StudyRecommendations({
       case "due":
       case "struggling":
       case "topic":
-        // Find the first document with cards to review
-        router.push("/dashboard"); // For now, stay on dashboard
+        // Navigate to review page to select document
+        router.push("/review");
         break;
       case "streak":
-        router.push("/dashboard");
+        router.push("/review");
         break;
       case "time":
-        router.push("/dashboard");
+        router.push("/review");
         break;
     }
   };
