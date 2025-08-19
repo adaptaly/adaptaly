@@ -77,7 +77,7 @@ export default function ReviewSelectClient({ documents }: ReviewSelectClientProp
         </div>
         <button 
           className="btn-secondary"
-          onClick={() => router.push("/daupload")}
+          onClick={() => router.push("/upload")}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 5v14m-7-7h14"/>
