@@ -31,14 +31,28 @@ export async function POST(req: NextRequest) {
     if (typeof body?.email === "string" && isValidEmail(body.email)) {
       const normalizedEmail = body.email.toLowerCase();
 
+      // Check if email exists first
+      const { data: existing } = await admin
+        .from("waitlist_subscribers")
+        .select("email")
+        .eq("email", normalizedEmail)
+        .single();
+
+      if (!existing) {
+        return NextResponse.json({ error: "Email not found" }, { status: 404 });
+      }
+
       // Soft unsubscribe: set unsubscribed_at
-      // Always return 200 to prevent email enumeration (don't reveal if email exists)
-      await admin
+      const { error } = await admin
         .from("waitlist_subscribers")
         .update({ unsubscribed_at: new Date().toISOString() })
         .eq("email", normalizedEmail);
 
-      // Always return success, even if email doesn't exist (privacy)
+      if (error) {
+        console.error("Unsubscribe error (email redacted):", error.message || error.code || "Unknown error");
+        return NextResponse.json({ error: "Failed to unsubscribe" }, { status: 500 });
+      }
+
       return NextResponse.json({ ok: true });
     }
 
