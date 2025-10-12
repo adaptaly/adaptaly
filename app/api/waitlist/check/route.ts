@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "../../../../server/supabase";
 
+export const runtime = "nodejs";
+
 function isValidEmail(email: string) {
   if (!email) return false;
   if (email.length > 320) return false;

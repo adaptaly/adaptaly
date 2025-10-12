@@ -1,5 +1,8 @@
 import { NextRequest } from "next/server";
 import { getAdminClient } from "../../../../server/supabase";
+import crypto from "node:crypto";
+
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const token = new URL(req.url).searchParams.get("token") || "";
@@ -18,7 +21,7 @@ export async function GET(req: NextRequest) {
     .limit(1);
 
   if (error) {
-    console.error("Consent lookup error (token redacted):", error.code);
+    console.error("Consent lookup error (token redacted):", error.message || error.code || "Unknown error");
     return htmlResponse("Error processing consent", 500, false);
   }
 
@@ -43,7 +46,7 @@ export async function GET(req: NextRequest) {
     );
 
   if (upsertError) {
-    console.error("Consent finalization error (email redacted):", upsertError.code);
+    console.error("Consent finalization error (email redacted):", upsertError.message || upsertError.code || "Unknown error");
     return htmlResponse("Error finalizing consent", 500, false);
   }
 
