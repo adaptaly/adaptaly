@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         .insert({ token, child_email: email, parent_email: parentEmail });
 
       if (error) {
-        console.error("Pending consent error (email redacted):", error.code);
+        console.error("Pending consent error (email redacted):", error.message || error.code || "Unknown error");
         return NextResponse.json({ error: "Failed to create consent request" }, { status: 500 });
       }
 
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       );
 
     if (error) {
-      console.error("Subscription error (email redacted):", error.code);
+      console.error("Subscription error (email redacted):", error.message || error.code || "Unknown error");
       return NextResponse.json({ error: "Failed to subscribe" }, { status: 500 });
     }
 
