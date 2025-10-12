@@ -1,8 +1,17 @@
-﻿export default function MarketingPage() {
+﻿import Hero from "../../components/layout/Hero";
+import ProblemSolution from "../../components/layout/ProblemSolution";
+import HowItWorks from "../../components/layout/HowItWorks";
+import BottomCTA from "../../components/layout/BottomCTA";
+import Footer from "../../components/layout/Footer";
+
+export default function MarketingPage() {
   return (
-    <main style={{ padding: 32 }}>
-      <h1>Adaptaly</h1>
-      <p>Landing goes here. We will match your Figma design next.</p>
-    </main>
+    <>
+      <Hero />
+      <ProblemSolution />
+      <HowItWorks />
+      <BottomCTA />
+      <Footer />
+    </>
   );
 }

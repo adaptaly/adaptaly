@@ -1,0 +1,155 @@
+.hero {
+  background: var(--gray-50);
+  padding: clamp(40px, 8vw, 80px) 0;
+  overflow: hidden;
+}
+
+.container {
+  margin: 0 auto;
+  max-width: 1200px;
+  padding: 0 clamp(24px, 8vw, 120px);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(32px, 6vw, 64px);
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .container {
+    grid-template-columns: 1fr 420px;
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 3vw, 32px);
+}
+
+.logo {
+  font-size: clamp(20px, 2.5vw, 24px);
+  font-weight: 600;
+  color: var(--brand);
+  letter-spacing: -0.0576px;
+  margin: 0;
+}
+
+.title {
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.5408px;
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.description {
+  font-size: clamp(16px, 2vw, 18px);
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--gray-500);
+  margin: 0;
+  max-width: 640px;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.emailInput {
+  flex: 1 1 280px;
+  min-width: 240px;
+  height: 48px;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--gray-900);
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.emailInput::placeholder {
+  color: var(--gray-400);
+}
+
+.emailInput:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.submitButton {
+  flex: 0 0 auto;
+  min-width: 156px;
+  height: 48px;
+  padding: 12px 24px;
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.submitButton:hover {
+  opacity: 0.9;
+}
+
+.submitButton:active {
+  opacity: 0.8;
+}
+
+.disclaimer {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--gray-500);
+  margin: 0;
+  max-width: 528px;
+}
+
+.illustration {
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 420 / 480;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.illustration img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 1023px) {
+  .illustration {
+    max-width: 420px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .hero {
+    padding: clamp(32px, 10vw, 48px) 0;
+  }
+
+  .form {
+    flex-direction: column;
+  }
+
+  .emailInput,
+  .submitButton {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+}

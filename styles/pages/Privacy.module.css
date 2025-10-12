@@ -1,0 +1,97 @@
+.page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 64px) clamp(20px, 6vw, 40px);
+  min-height: 100vh;
+}
+
+.header {
+  margin-bottom: clamp(32px, 6vw, 48px);
+  border-bottom: 1px solid var(--gray-200);
+  padding-bottom: clamp(20px, 4vw, 32px);
+}
+
+.header h1 {
+  margin: 0 0 12px 0;
+  font-size: clamp(32px, 5vw, 48px);
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--gray-900);
+  letter-spacing: -0.02em;
+}
+
+.lastUpdated {
+  font-size: 15px;
+  color: var(--gray-500);
+  margin: 0;
+}
+
+.section {
+  margin: clamp(32px, 6vw, 48px) 0;
+}
+
+.section h2 {
+  font-size: clamp(22px, 3.5vw, 28px);
+  margin: 0 0 clamp(12px, 2vw, 16px) 0;
+  font-weight: 600;
+  color: var(--gray-900);
+  line-height: 1.3;
+}
+
+.section p {
+  line-height: 1.7;
+  margin: 0 0 16px 0;
+  color: var(--gray-700);
+  font-size: 16px;
+}
+
+.section p:last-child {
+  margin-bottom: 0;
+}
+
+.section ul {
+  margin: 16px 0;
+  padding-left: 24px;
+}
+
+.section li {
+  line-height: 1.7;
+  margin-bottom: 12px;
+  color: var(--gray-700);
+  font-size: 16px;
+}
+
+.section li:last-child {
+  margin-bottom: 0;
+}
+
+.section a {
+  color: var(--brand);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.section a:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.section strong {
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.section em {
+  color: var(--gray-500);
+  font-style: italic;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 32px 20px;
+  }
+
+  .section {
+    margin: 32px 0;
+  }
+}

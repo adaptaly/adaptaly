@@ -1,4 +1,15 @@
-﻿:root { --brand: #4BC3B7; --bg: #ffffff; --fg: #111111; }
+﻿:root {
+  --brand: #4BC3B7;
+  --bg: #ffffff;
+  --fg: #111111;
+  --gray-50: #F9FAFB;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-700: #374151;
+  --gray-900: #111111;
+}
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0;

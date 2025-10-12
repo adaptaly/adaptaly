@@ -1,0 +1,117 @@
+.section {
+  padding: clamp(40px, 8vw, 64px) 0 clamp(80px, 15vw, 150px);
+  background: white;
+  text-align: center;
+}
+
+.container {
+  margin: 0 auto;
+  max-width: 800px;
+  padding: 0 clamp(24px, 8vw, 120px);
+}
+
+.title {
+  font-size: clamp(32px, 5vw, 40px);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.32px;
+  color: var(--gray-900);
+  margin: 0 auto clamp(12px, 2vw, 16px);
+}
+
+.subtitle {
+  font-size: clamp(18px, 2.5vw, 20px);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--gray-500);
+  margin: 0 auto clamp(32px, 6vw, 48px);
+  max-width: 750px;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  align-items: stretch;
+  max-width: 500px;
+  margin: 0 auto clamp(12px, 2vw, 16px);
+}
+
+.emailInput {
+  flex: 1 1 240px;
+  min-width: 200px;
+  height: 54px;
+  padding: 14px 18px;
+  background: white;
+  border: 2px solid var(--gray-200);
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--gray-900);
+  font-family: inherit;
+  transition: border-color 0.2s;
+  text-align: center;
+}
+
+.emailInput::placeholder {
+  color: var(--gray-400);
+}
+
+.emailInput:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.submitButton {
+  flex: 0 0 auto;
+  min-width: 144px;
+  height: 54px;
+  padding: 14px 28px;
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.submitButton:hover {
+  opacity: 0.9;
+}
+
+.submitButton:active {
+  opacity: 0.8;
+}
+
+.disclaimer {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.43;
+  color: var(--gray-500);
+  margin: clamp(16px, 3vw, 24px) auto 0;
+  max-width: 590px;
+}
+
+.disclaimer strong {
+  font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  .form {
+    flex-direction: column;
+  }
+
+  .emailInput,
+  .submitButton {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .emailInput {
+    text-align: left;
+  }
+}
