@@ -362,3 +362,56 @@
     width: 100%;
   }
 }
+
+/* Pending parent approval state */
+.pendingBar {
+  width: 100%;
+  background: #F59E0B;
+  color: white;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.pendingMessage {
+  margin: 0;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.checkButton {
+  background: white;
+  color: #F59E0B;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.checkButton:hover {
+  opacity: 0.9;
+}
+
+.checkButton:active {
+  opacity: 0.8;
+}
+
+.checkButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.checkButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
+}

@@ -18,6 +18,7 @@ export default function WaitlistForm({ className }: Props) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showError, setShowError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Verify subscription status from database on mount
@@ -133,6 +134,7 @@ export default function WaitlistForm({ className }: Props) {
       setShowConfirmModal(true);
     } else {
       // Subscribe action
+      setIsLoading(true);
       const emailToSave = email;
       const isMinor = age === "under16";
       const parentEmailToSave = isMinor ? parentEmail : "";
@@ -154,6 +156,7 @@ export default function WaitlistForm({ className }: Props) {
 
         if (!res.ok) {
           console.error("Waitlist error", data);
+          setIsLoading(false);
           return;
         }
 
@@ -161,13 +164,14 @@ export default function WaitlistForm({ className }: Props) {
         if (data.pending === true) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
             subscribed: false,
-            savedEmail: "",
+            savedEmail: emailToSave, // Store child email so we can check approval later
             showingUnsubscribe: false,
             showingSuccess: true,
             pendingParent: true
           }));
           setShowSuccess(true);
           setIsPendingConsent(true);
+          setIsLoading(false);
           window.dispatchEvent(new Event("waitlistSync"));
           // Stay in pending state - no timeout, no unsubscribe
           return;
@@ -183,6 +187,7 @@ export default function WaitlistForm({ className }: Props) {
         }));
         setShowSuccess(true);
         setIsPendingConsent(false);
+        setIsLoading(false);
         window.dispatchEvent(new Event("waitlistSync"));
 
         // After SUCCESS_DURATION, hide success and show unsubscribe form
@@ -202,7 +207,52 @@ export default function WaitlistForm({ className }: Props) {
         }, SUCCESS_DURATION);
       } catch (err) {
         console.error("Waitlist error", err);
+        setIsLoading(false);
       }
+    }
+  }
+
+  async function checkApprovalStatus() {
+    // Check if parent has approved by querying the database
+    const storedStatus = localStorage.getItem(STORAGE_KEY);
+    if (!storedStatus) return;
+
+    const { savedEmail } = JSON.parse(storedStatus);
+    if (!savedEmail) return;
+
+    try {
+      setIsLoading(true);
+
+      // Check if the child email is now in waitlist_subscribers
+      const res = await fetch("/api/waitlist/check", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: savedEmail })
+      });
+      const data = await res.json();
+
+      if (data.subscribed) {
+        // Parent approved! Transition to subscribed state
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          subscribed: true,
+          savedEmail: savedEmail,
+          showingUnsubscribe: false,
+          showingSuccess: false,
+          pendingParent: false
+        }));
+        setIsPendingConsent(false);
+        setShowSuccess(false);
+        setIsSubscribed(true);
+        setIsLoading(false);
+        window.dispatchEvent(new Event("waitlistSync"));
+      } else {
+        // Still pending
+        setIsLoading(false);
+        // Could show a message here, but for now just do nothing
+      }
+    } catch (err) {
+      console.error("Check approval error", err);
+      setIsLoading(false);
     }
   }
 
@@ -303,15 +353,29 @@ export default function WaitlistForm({ className }: Props) {
   }
 
   if (showSuccess) {
+    if (isPendingConsent) {
+      return (
+        <div className={styles.pendingBar}>
+          <p className={styles.pendingMessage}>
+            Thanks! We've emailed your parent to confirm. Waiting for parental approval.
+          </p>
+          <button
+            onClick={checkApprovalStatus}
+            disabled={isLoading}
+            className={styles.checkButton}
+          >
+            {isLoading ? "Checking..." : "Check Status"}
+          </button>
+        </div>
+      );
+    }
     return (
       <div
         className={styles.okBar}
         role="status"
         aria-live="polite"
       >
-        {isPendingConsent
-          ? "Thanks! We've emailed your parent to confirm. Waiting for parental approval."
-          : "Thanks for joining the waitlist"}
+        Thanks for joining the waitlist
       </div>
     );
   }
@@ -357,9 +421,10 @@ export default function WaitlistForm({ className }: Props) {
   // Button is disabled if:
   // - Subscribe mode: no email or invalid email, OR (under 16 AND no/invalid parent email)
   // - Unsubscribe mode: no current email AND no saved email, OR current email is invalid
-  const isButtonDisabled = isSubscribed
+  // - Loading: always disabled during API calls
+  const isButtonDisabled = isLoading || (isSubscribed
     ? (email && !isValidEmail) || (!email && !hasSavedEmail)
-    : !email || !isValidEmail || (age === "under16" && (!parentEmail || !isValidParentEmail));
+    : !email || !isValidEmail || (age === "under16" && (!parentEmail || !isValidParentEmail)));
 
   return (
     <>
@@ -439,7 +504,7 @@ export default function WaitlistForm({ className }: Props) {
           className={styles.button}
           disabled={isButtonDisabled}
         >
-          {isSubscribed ? "Unsubscribe" : "Join Waitlist"}
+          {isLoading ? "Loading..." : (isSubscribed ? "Unsubscribe" : "Join Waitlist")}
         </button>
         <span id="email-feedback" className={styles.visFeedback} aria-live="polite">
           {email && !isValidEmail ? "Enter a valid email" : ""}
