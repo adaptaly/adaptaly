@@ -3,7 +3,8 @@ import styles from "../../../styles/pages/Privacy.module.css";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Adaptaly",
-  description: "How Adaptaly handles your data: purpose, legal basis, processors, rights, and contact."
+  description:
+    "How Adaptaly handles your data: purpose, legal basis, processors, rights, parental consent, and contact details.",
 };
 
 function LastUpdated() {
@@ -17,151 +18,200 @@ export default function PrivacyPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <h1>Privacy Policy</h1>
-        <p className={styles.lastUpdated}>Last updated: <LastUpdated /></p>
+        <p className={styles.lastUpdated}>
+          Last updated: <LastUpdated />
+        </p>
       </header>
 
       <section className={styles.section}>
         <h2>Who we are</h2>
         <p>
-          Adaptaly ("we", "us") is an AI-powered adaptive learning platform. Controller: Adaptaly B.V., Netherlands.
+          Adaptaly ("we", "us") is a personal project and educational platform
+          created and managed by an individual developer based in the
+          Netherlands. Adaptaly helps students study more effectively using
+          AI-powered tools.
         </p>
-        <p>Contact: <a href="mailto:privacy@adaptaly.com">privacy@adaptaly.com</a></p>
+        <p>
+          Contact:{" "}
+          <a href="mailto:adaptaly@gmail.com">adaptaly@gmail.com</a>
+        </p>
       </section>
 
       <section className={styles.section}>
         <h2>What we collect and why</h2>
         <ul>
           <li>
-            <strong>Email address</strong> — for waitlist updates and early access notifications.
+            <strong>Email address</strong> - used to manage the waitlist and
+            send early access or product updates.
             <br />
-            <em>Legal basis:</em> Consent (GDPR Art. 6(1)(a)). You can withdraw at any time via unsubscribe.
+            <em>Legal basis:</em> Consent (GDPR Art. 6 (1)(a)). You can withdraw
+            your consent at any time using the unsubscribe option.
           </li>
           <li>
-            <strong>Age confirmation</strong> — to determine if parental consent is required (users under 16).
+            <strong>Age confirmation</strong> - used to determine if parental
+            consent is required for users under 16.
             <br />
-            <em>Legal basis:</em> Legal obligation (GDPR Art. 6(1)(c) &amp; Art. 8).
+            <em>Legal basis:</em> Legal obligation (GDPR Art. 6 (1)(c) and Art. 8).
           </li>
           <li>
-            <strong>Parent/guardian email</strong> — for users under 16, to obtain verifiable consent.
+            <strong>Parent or guardian email</strong> - for minors, used only to
+            obtain verifiable consent.
             <br />
             <em>Legal basis:</em> Legal obligation (GDPR Art. 8).
           </li>
         </ul>
-        <p>We do not collect passwords, payment information, or unnecessary personal data at this stage.</p>
+        <p>
+          We do not collect passwords, payment information, or any data that is
+          not necessary for the waitlist and consent process.
+        </p>
       </section>
 
       <section className={styles.section}>
         <h2>Processors and service providers</h2>
-        <p>We use the following third-party services to process your data:</p>
+        <p>
+          Adaptaly uses trusted third-party services to host and process limited
+          data securely:
+        </p>
         <ul>
-          <li><strong>Hosting &amp; CDN:</strong> Vercel (US/EU) — application hosting and delivery</li>
-          <li><strong>Database:</strong> Supabase (EU) — secure data storage</li>
+          <li>
+            <strong>Hosting and CDN:</strong> Vercel (US/EU) for application
+            hosting and content delivery.
+          </li>
+          <li>
+            <strong>Database:</strong> Supabase (EU) for secure data storage.
+          </li>
+          <li>
+            <strong>Email delivery:</strong> Brevo (EU) for sending parental
+            consent and waitlist emails.
+          </li>
         </ul>
         <p>
-          All processors are bound by data processing agreements and implement appropriate security measures.
+          These processors follow strict security and privacy practices and are
+          bound by data processing agreements.
         </p>
       </section>
 
       <section className={styles.section}>
         <h2>International transfers</h2>
         <p>
-          Some of our processors may transfer data outside the EEA. When this occurs, we ensure appropriate safeguards
-          are in place (e.g., Standard Contractual Clauses). Details available upon request.
+          Some service providers may process data outside the EEA. When this
+          happens, we ensure adequate protections are in place such as Standard
+          Contractual Clauses approved by the European Commission.
         </p>
       </section>
 
       <section className={styles.section}>
         <h2>Data retention</h2>
         <p>
-          Waitlist emails are retained until product launch or until you unsubscribe, whichever comes first.
-          We may retain data longer if required by law (e.g., tax obligations, legal disputes).
+          Waitlist data is stored until Adaptaly launches or until you
+          unsubscribe, whichever comes first. Data may be retained longer only
+          if required by law.
         </p>
         <p>
-          Pending parental consent records are deleted once consent is granted or after 30 days if no action is taken.
+          Pending parental consent records are deleted after consent is granted
+          or automatically after 30 days if no response is received.
         </p>
       </section>
 
       <section className={styles.section}>
         <h2>Your rights</h2>
-        <p>Under GDPR, you have the right to:</p>
+        <p>Under the GDPR, you have the right to:</p>
         <ul>
-          <li><strong>Access</strong> your personal data</li>
-          <li><strong>Rectification</strong> of inaccurate data</li>
-          <li><strong>Erasure</strong> ("right to be forgotten")</li>
-          <li><strong>Restriction</strong> of processing</li>
-          <li><strong>Data portability</strong></li>
-          <li><strong>Object</strong> to processing</li>
-          <li><strong>Withdraw consent</strong> at any time (via unsubscribe)</li>
+          <li>Access your personal data</li>
+          <li>Rectify inaccurate or incomplete data</li>
+          <li>Request erasure (right to be forgotten)</li>
+          <li>Restrict or object to processing</li>
+          <li>Request data portability</li>
+          <li>Withdraw consent at any time</li>
         </ul>
         <p>
-          To exercise your rights, contact us at <a href="mailto:privacy@adaptaly.com">privacy@adaptaly.com</a>.
+          To exercise your rights, contact{" "}
+          <a href="mailto:adaptaly@gmail.com">adaptaly@gmail.com</a>.
         </p>
         <p>
-          You also have the right to lodge a complaint with your local data protection authority
-          (in NL: <a href="https://autoriteitpersoonsgegevens.nl" target="_blank" rel="noopener noreferrer">Autoriteit Persoonsgegevens</a>).
+          You may also contact the Dutch Data Protection Authority at{" "}
+          <a
+            href="https://autoriteitpersoonsgegevens.nl"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            autoriteitpersoonsgegevens.nl
+          </a>
+          .
         </p>
       </section>
 
       <section className={styles.section}>
         <h2>Children and parental consent</h2>
         <p>
-          In accordance with GDPR Article 8, processing of personal data of children under 16 requires parental consent.
-          Our waitlist form includes an age confirmation step:
+          In accordance with GDPR Article 8, children under 16 require parental
+          consent before their data can be processed. The waitlist includes an
+          age confirmation step:
         </p>
         <ul>
-          <li><strong>16 or older:</strong> You can join directly</li>
-          <li><strong>Under 16:</strong> We require a parent/guardian email to obtain verifiable consent</li>
+          <li>
+            <strong>16 or older:</strong> You can join directly.
+          </li>
+          <li>
+            <strong>Under 16:</strong> A parent or guardian email is required to
+            obtain consent.
+          </li>
         </ul>
         <p>
-          Parents will receive a consent link via email. The child's data is only added to our waitlist after parental approval.
+          Parents receive an email containing a consent link. The child's data
+          is only added to the waitlist after approval.
         </p>
       </section>
 
       <section className={styles.section}>
         <h2>Cookies and analytics</h2>
         <p>
-          We currently use only <strong>essential cookies</strong> required for the website to function (e.g., session management).
+          We currently use only <strong>essential cookies</strong> required for
+          the website to function correctly. We do not use analytics,
+          advertising, or tracking cookies at this time.
         </p>
         <p>
-          Non-essential cookies (analytics, marketing) are not used at this time. If we add them in the future,
-          we will request your consent and provide cookie management options.
+          If we add analytics or non-essential cookies later, we will update
+          this policy and ask for consent.
         </p>
       </section>
 
       <section className={styles.section}>
         <h2>Security</h2>
-        <p>
-          We implement appropriate technical and organizational measures to protect your data, including:
-        </p>
+        <p>We take reasonable technical and organizational measures to protect your data:</p>
         <ul>
-          <li>Encryption in transit (TLS/HTTPS)</li>
-          <li>Encryption at rest (database-level)</li>
-          <li>Access controls and authentication</li>
-          <li>Regular security audits</li>
+          <li>Encryption in transit (HTTPS and TLS)</li>
+          <li>Encryption at rest in the database</li>
+          <li>Access control and authentication</li>
+          <li>Regular reviews of dependencies and configurations</li>
         </ul>
         <p>
-          While we strive to protect your data, no method of transmission or storage is 100% secure.
-          Please contact us immediately if you suspect unauthorized access.
+          While we strive to protect your information, no system is completely
+          secure. Please contact us immediately if you suspect unauthorized
+          access to your data.
         </p>
       </section>
 
       <section className={styles.section}>
         <h2>Changes to this policy</h2>
         <p>
-          We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated
-          "Last updated" date. Significant changes will be communicated via email to waitlist subscribers.
+          This policy may be updated from time to time. Updates will be posted
+          on this page with a new Last updated date. Significant changes will be
+          announced by email to waitlist subscribers.
         </p>
       </section>
 
       <section className={styles.section}>
-        <h2>Contact us</h2>
+        <h2>Contact</h2>
         <p>
-          For questions about this Privacy Policy or to exercise your data rights, contact:
+          For any questions about this Privacy Policy or your personal data,
+          contact:
         </p>
         <p>
-          <strong>Email:</strong> <a href="mailto:privacy@adaptaly.com">privacy@adaptaly.com</a>
+          <strong>Email:</strong>{" "}
+          <a href="mailto:adaptaly@gmail.com">adaptaly@gmail.com</a>
           <br />
-          <strong>Address:</strong> Adaptaly B.V., Netherlands
+          <strong>Controller:</strong> Individual developer based in the Netherlands
         </p>
       </section>
     </main>
